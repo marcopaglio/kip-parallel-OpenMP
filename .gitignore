@@ -1,3 +1,13 @@
+### Project-specific ###
+# Profiler dir
+/profiler_kip_parallel_openMP
+
+
+### CMake ###
+cmake-build-*/
+
+
+### C++ ###
 # Prerequisites
 *.d
 
