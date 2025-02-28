@@ -30,6 +30,12 @@ add_library(kip_openMP_lib
 
 add_executable(kip_openMP_main src/main.cpp)
 
+find_package(OpenMP)
+if(OPENMP_CXX_FOUND)
+    message(STATUS "OpenMP for C++ found with CXX_VERSION=${OpenMP_CXX_VERSION}")
+    target_link_libraries(kip_openMP_lib PUBLIC OpenMP::OpenMP_CXX)
+endif()
+
 target_link_libraries(kip_openMP_main kip_openMP_lib)
 
 add_compile_definitions(PROJECT_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
