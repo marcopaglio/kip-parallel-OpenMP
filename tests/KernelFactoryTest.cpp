@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
-#include "../src/KernelFactory.h"
+#include "kernel/KernelFactory.h"
 
 class BlurKernelFactoryTest : public ::testing::TestWithParam<std::pair<unsigned int, float>> {
 protected:
-    std::string blurName = "blur";
+    std::string boxBlurName = "boxBlur";
 };
 
 INSTANTIATE_TEST_SUITE_P(, BlurKernelFactoryTest,
@@ -21,10 +21,10 @@ INSTANTIATE_TEST_SUITE_P(, BlurKernelFactoryTest,
 TEST_P(BlurKernelFactoryTest, testCreateBlurKernel) {
     const unsigned int order = GetParam().first;
     const float blurWeightValue = GetParam().second;
-    const std::unique_ptr<Kernel> kernel = KernelFactory::createBlurKernel(order);
+    const std::unique_ptr<Kernel> kernel = KernelFactory::createBoxBlurKernel(order);
 
     ASSERT_NE(kernel, nullptr);
-    EXPECT_EQ(kernel->getName(), blurName);
+    EXPECT_EQ(kernel->getName(), boxBlurName);
     EXPECT_EQ(kernel->getOrder(), order);
     ASSERT_EQ(kernel->getWeights().size(), order * order);
     for (auto weight : kernel->getWeights()) {
@@ -35,7 +35,7 @@ TEST_P(BlurKernelFactoryTest, testCreateBlurKernel) {
 
 TEST_F(BlurKernelFactoryTest, testCreateBlurKernelWithEvenOrder) {
     constexpr unsigned int order = 4;
-    EXPECT_THROW(KernelFactory::createBlurKernel(order), std::invalid_argument);
+    EXPECT_THROW(KernelFactory::createBoxBlurKernel(order), std::invalid_argument);
 }
 
 

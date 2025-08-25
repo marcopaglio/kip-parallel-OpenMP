@@ -1,5 +1,5 @@
 #include "gtest/gtest.h"
-#include "../src/Image.h"
+#include "image/Image.h"
 
 
 TEST(ImageTest, testConstructor) {
@@ -29,8 +29,8 @@ TEST(ImageTest, testConstructor) {
 
     EXPECT_EQ(image.getWidth(), width);
     EXPECT_EQ(image.getHeight(), height);
-    EXPECT_EQ(image.getData().size(), height);
-    EXPECT_EQ(image.getData()[0].size(), width);
+    ASSERT_EQ(image.getData().size(), height);
+    ASSERT_EQ(image.getData()[0].size(), width);
     for (unsigned int y = 0; y < height; y++) {
         for (unsigned int x = 0; x < width; x++) {
             EXPECT_EQ(image.getData()[y][x].getR(), pixels[y][x].getR());

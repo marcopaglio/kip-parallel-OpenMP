@@ -3,32 +3,46 @@ project(kip_parallel_openMP)
 
 set(CMAKE_CXX_STANDARD 17)
 
-include_directories(${PROJECT_SOURCE_DIR}/include)
+if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC" AND USE_ASAN)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
+    add_compile_options(/fsanitize=address /Zi)
+endif()
 
-add_library(kip_openMP_lib
-        src/Pixel.cpp
-        src/Pixel.h
-        src/Image.cpp
-        src/Image.h
-        src/Kernel.cpp
-        src/Kernel.h
-        src/ImageReader.cpp
-        src/ImageReader.h
-        src/STBImageReader.cpp
-        src/STBImageReader.h
-        src/ImageProcessing.cpp
-        src/ImageProcessing.h
-        src/KernelFactory.cpp
-        src/KernelFactory.h
-        src/Timer.cpp
-        src/Timer.h
-        src/HighResolutionTimer.cpp
-        src/HighResolutionTimer.h
-        src/SteadyTimer.cpp
-        src/SteadyTimer.h
+include_directories(
+        ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/src
 )
 
-add_executable(kip_openMP_main src/main.cpp)
+add_library(kip_openMP_lib
+        src/image/Pixel.cpp
+        src/image/Pixel.h
+        src/image/Image.cpp
+        src/image/Image.h
+        src/kernel/Kernel.cpp
+        src/kernel/Kernel.h
+        src/image/reader/ImageReader.cpp
+        src/image/reader/ImageReader.h
+        src/image/reader/STBImageReader.cpp
+        src/image/reader/STBImageReader.h
+        src/processing/ImageProcessing.cpp
+        src/processing/ImageProcessing.h
+        src/kernel/KernelFactory.cpp
+        src/kernel/KernelFactory.h
+)
+
+add_executable(kip_openMP_main
+        src/expt/main.cpp
+        src/expt/timer/Timer.cpp
+        src/expt/timer/Timer.h
+        src/expt/timer/HighResolutionTimer.cpp
+        src/expt/timer/HighResolutionTimer.h
+        src/expt/timer/SteadyTimer.cpp
+        src/expt/timer/SteadyTimer.h
+)
+target_link_libraries(kip_openMP_main kip_openMP_lib)
+
+add_executable(kip_openMP_profile src/expt/profile.cpp)
+target_link_libraries(kip_openMP_profile kip_openMP_lib)
 
 find_package(OpenMP)
 if(OPENMP_CXX_FOUND)
@@ -36,9 +50,8 @@ if(OPENMP_CXX_FOUND)
     target_link_libraries(kip_openMP_lib PUBLIC OpenMP::OpenMP_CXX)
 endif()
 
-target_link_libraries(kip_openMP_main kip_openMP_lib)
-
 add_compile_definitions(PROJECT_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+add_compile_definitions(CMAKE_BINARY_DIR="${CMAKE_BINARY_DIR}")
 
 enable_testing()
 

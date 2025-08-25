@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <filesystem>
-#include "../src/STBImageReader.h"
+#include "image/reader/STBImageReader.h"
 
 class STBImageReaderTest : public ::testing::Test {
 protected:
