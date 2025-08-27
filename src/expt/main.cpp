@@ -18,11 +18,11 @@ namespace KernelInfos {
         edge_detection
     };
 
-    static KernelTypes allTypes[] = {box_blur, edge_detection};
-    constexpr unsigned int numKernelTypes = sizeof(allTypes) / sizeof(KernelTypes);
+    static KernelTypes selectedTypes[] = {box_blur};
+    constexpr unsigned int numSelectedTypes = sizeof(selectedTypes) / sizeof(KernelTypes);
 
-    static unsigned int allOrders[] = {7, 13, 19, 25};
-    constexpr unsigned int numKernelOrders = sizeof(allOrders) / sizeof(unsigned int);
+    static unsigned int selectedOrders[] = {7, 13, 19, 25};
+    constexpr unsigned int numSelectedOrders = sizeof(selectedOrders) / sizeof(unsigned int);
 }
 
 int main() {
@@ -59,13 +59,13 @@ int main() {
                     ") loaded from: " << fullPathStream.str() << std::endl;
                 fullPathStream.str(std::string());
 
-                for (const unsigned int order : KernelInfos::allOrders) {
+                for (const unsigned int order : KernelInfos::selectedOrders) {
                     // enlargement
                     const auto extendedImage = ImageProcessing::extendEdge(*img, (order - 1) / 2);
                     std::cout << "Image "  << imageName << " enlarged to " <<
                         extendedImage->getWidth() << "x" << extendedImage->getHeight() << std::endl;
 
-                    for (const auto kernelType : KernelInfos::allTypes) {
+                    for (const auto kernelType : KernelInfos::selectedTypes) {
                         // create kernel
                         std::unique_ptr<Kernel> kernel;
                         switch (kernelType) {
@@ -112,8 +112,8 @@ int main() {
 
                     // idle time
                     if (imageQuality != maxImageQuality ||
-                        order != KernelInfos::allOrders[KernelInfos::numKernelOrders - 1]) {
-                        unsigned int idleTime = imageQuality + order / 2;
+                        order != KernelInfos::selectedOrders[KernelInfos::numSelectedOrders - 1]) {
+                        unsigned int idleTime = KernelInfos::numSelectedTypes * (imageQuality + order / 2) / 2;
                         std::cout << "Take a pause of " << idleTime << " seconds... ";
                         std::this_thread::sleep_for(std::chrono::seconds(idleTime));
                         std::cout << "finished!" << std::endl << std::endl;
