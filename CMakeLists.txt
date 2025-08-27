@@ -44,6 +44,17 @@ target_link_libraries(kip_openMP_main kip_openMP_lib)
 add_executable(kip_openMP_profile src/expt/profile.cpp)
 target_link_libraries(kip_openMP_profile kip_openMP_lib)
 
+add_executable(kip_openMP_strong_scaling
+        src/expt/strong_scaling.cpp
+        src/expt/timer/Timer.cpp
+        src/expt/timer/Timer.h
+        src/expt/timer/HighResolutionTimer.cpp
+        src/expt/timer/HighResolutionTimer.h
+        src/expt/timer/SteadyTimer.cpp
+        src/expt/timer/SteadyTimer.h
+)
+target_link_libraries(kip_openMP_strong_scaling kip_openMP_lib)
+
 find_package(OpenMP)
 if(OPENMP_CXX_FOUND)
     message(STATUS "OpenMP for C++ found with CXX_VERSION=${OpenMP_CXX_VERSION}")
