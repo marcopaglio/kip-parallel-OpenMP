@@ -30,8 +30,7 @@ add_library(kip_openMP_lib
         src/kernel/KernelFactory.h
 )
 
-add_executable(kip_openMP_main
-        src/expt/main.cpp
+add_library(kip_openMP_timer
         src/expt/timer/Timer.cpp
         src/expt/timer/Timer.h
         src/expt/timer/HighResolutionTimer.cpp
@@ -39,21 +38,22 @@ add_executable(kip_openMP_main
         src/expt/timer/SteadyTimer.cpp
         src/expt/timer/SteadyTimer.h
 )
-target_link_libraries(kip_openMP_main kip_openMP_lib)
+
+add_executable(kip_openMP_main src/expt/main.cpp)
+target_link_libraries(kip_openMP_main kip_openMP_lib kip_openMP_timer)
 
 add_executable(kip_openMP_profile src/expt/profile.cpp)
 target_link_libraries(kip_openMP_profile kip_openMP_lib)
 
-add_executable(kip_openMP_strong_scaling
-        src/expt/strong_scaling.cpp
-        src/expt/timer/Timer.cpp
-        src/expt/timer/Timer.h
-        src/expt/timer/HighResolutionTimer.cpp
-        src/expt/timer/HighResolutionTimer.h
-        src/expt/timer/SteadyTimer.cpp
-        src/expt/timer/SteadyTimer.h
+add_executable(kip_openMP_strong_scaling src/expt/strong_scaling.cpp)
+target_link_libraries(kip_openMP_strong_scaling kip_openMP_lib kip_openMP_timer)
+
+add_executable(kip_openMP_weak_scaling
+        src/expt/weak_scaling.cpp
+        src/expt/workload/Workload.cpp
+        src/expt/workload/Workload.h
 )
-target_link_libraries(kip_openMP_strong_scaling kip_openMP_lib)
+target_link_libraries(kip_openMP_weak_scaling kip_openMP_lib kip_openMP_timer)
 
 find_package(OpenMP)
 if(OPENMP_CXX_FOUND)
