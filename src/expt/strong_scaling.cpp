@@ -24,10 +24,10 @@ int main() {
 #else
     const int maxNumThreads = 1;
 #endif
-    constexpr unsigned int imageQuality = 4;
+    constexpr unsigned int imageQuality = 4; // 4, 5, 6, 7
     constexpr unsigned int numImageQuality = 3;
     constexpr unsigned int order = 7; // 7, 13, 19, 25
-    constexpr unsigned int numReps = 1;
+    constexpr unsigned int numReps = 3;
     const std::string cvsName = "kip_openMP_strongScaling.csv";
 
     try {
@@ -40,7 +40,7 @@ int main() {
 
         // setup csv
         std::ofstream csvFile(cvsName);
-        csvFile << "NumThreads,ImageName,ImageDimension,KernelName,KernelDimension,TimePerRep_s,SpeedUp" << "\n";
+        csvFile << "ImageName,ImageDimension,KernelName,KernelDimension,TimePerRep_s,NumThreads,SpeedUp,Efficiency" << "\n";
 
         // setup image reader
         STBImageReader imageReader{};
@@ -75,38 +75,32 @@ int main() {
 
                 // transform
                 const std::chrono::duration<double> wall_clock_time_start = timer->now();
-                std::unique_ptr<Image> outputImage;
                 for (unsigned int rep = 0; rep < numReps; rep++)
-                    outputImage = ImageProcessing::convolution(*extendedImage, *kernel);
+                    ImageProcessing::convolution(*extendedImage, *kernel);
                 const std::chrono::duration<double> wall_clock_time_end = timer->now();
                 const std::chrono::duration<double> wall_clock_time_duration = wall_clock_time_end - wall_clock_time_start;
+                const auto timePerRep = wall_clock_time_duration.count() / numReps;
                 std::cout << "Image processed " << numReps << " times in " << wall_clock_time_duration.count() << " seconds [Wall Clock]" <<
-                    " with an average of " << wall_clock_time_duration.count() / numReps << " seconds [Wall Clock] per repetition." << std::endl;
+                    " with an average of " << timePerRep << " seconds [Wall Clock] per repetition." << std::endl;
 
                 if (numThreads == 1)
-                    sequentialTimes[imageNum - 1] = wall_clock_time_duration.count() / numReps;
-
-                // save
-                fullPathStream << PROJECT_SOURCE_DIR << "/imgs/output/" << imageName <<
-                    "_" << kernel->getName() << kernel->getOrder() << ".jpg";
-                imageReader.saveJPGImage(*outputImage, fullPathStream.str());
-                std::cout << "Image " << outputImage->getWidth() << "x" << outputImage->getHeight() <<
-                    " saved at: " << fullPathStream.str() << std::endl << std::endl;
-                fullPathStream.str(std::string());
+                    sequentialTimes[imageNum - 1] = timePerRep;
+                const double speedUp = sequentialTimes[imageNum - 1] / timePerRep;
 
                 // csv record
-                csvFile << numThreads << ","
-                        << imageName << ","
+                csvFile << imageName << ","
                         << img->getWidth() << "x" << img->getHeight() << ","
                         << kernel->getName() << ","
                         << order << ","
-                        << wall_clock_time_duration.count() / numReps << ","
-                        << sequentialTimes[imageNum - 1] / (wall_clock_time_duration.count() / numReps)
+                        << timePerRep << ","
+                        << numThreads << ","
+                        << speedUp << ","
+                        << speedUp / numThreads
                         << "\n";
             }
         }
         csvFile.close();
-        std::cout << "Data saved on " << CMAKE_BINARY_DIR << "/" << cvsName << std::endl;
+        std::cout << "Data saved at " << CMAKE_BINARY_DIR << "/" << cvsName << std::endl;
 
     } catch (const std::exception& ex) {
         std::cerr << ex.what() << std::endl;
