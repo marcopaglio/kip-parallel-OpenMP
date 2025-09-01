@@ -62,9 +62,12 @@ def plotStrongScaling(csv_filename = "../data/kip_openMP_strongScaling.csv", min
         plt.xlabel("1 / NumThreads")
         plt.ylabel("1 / SpeedUp")
         plt.title(f"Estimate f: {image_dim} images | {kernel_dim} kernels")
-        plt.legend()
+        plt.legend(loc="best")
         plt.grid(True, linestyle="--", alpha=0.6)
         plt.tight_layout()
+        
+        filename = f"amdahl_estimate_{image_dim}_{kernel_dim}.png".replace("x", "x")
+        plt.savefig(filename, dpi=150)
         plt.show()
         plt.close()
 
@@ -217,7 +220,7 @@ def plotStrongScaling(csv_filename = "../data/kip_openMP_strongScaling.csv", min
     
     
         plt.title(f"Strong Scaling: {image_dim} images | {kernel_dim}x{kernel_dim} kernels")
-        plt.legend(h1+h2, l1+l2, loc="center right")
+        plt.legend(h1+h2, l1+l2, loc="best")
         plt.tight_layout()
         
         filename = f"strong_scaling_{image_dim}_{kernel_dim}.png".replace("x", "x")

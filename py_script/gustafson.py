@@ -60,9 +60,12 @@ def plotWeakScaling(csv_filename = "../data/kip_openMP_weakScaling.csv",
         plt.xlabel("Threads number (p)")
         plt.ylabel("Scaled Speedup")
         plt.title(f"Gustafson's law evaluation: W₀ = {unit_of_work} images | {kernel_dim}x{kernel_dim} kernels")
-        plt.legend()
+        plt.legend(loc="best")
         plt.grid(True, linestyle="--", alpha=0.6)
         plt.tight_layout()
+        
+        filename = f"gustafson_evaluation_{unit_of_work}_{kernel_dim}.png".replace("x", "x")
+        plt.savefig(filename, dpi=150)
         plt.show()
         plt.close()
         
@@ -187,7 +190,7 @@ def plotWeakScaling(csv_filename = "../data/kip_openMP_weakScaling.csv",
         #   ma è raro e spesso sospetto.    
     
         plt.title(f"Weak Scaling: W₀ = {unit_of_work} images | {kernel_dim}x{kernel_dim} kernels")
-        plt.legend(h1+h2, l1+l2, loc="center left")
+        plt.legend(h1+h2, l1+l2, loc="best")
         plt.tight_layout()
         
         filename = f"weak_scaling_{unit_of_work}_{kernel_dim}.png".replace("x", "x")
