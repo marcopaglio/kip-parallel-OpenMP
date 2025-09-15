@@ -3,7 +3,9 @@ Parallelized version of Kernel Image Processing, i.e. kernel filtering applied t
 
 
 
+## Complessità del problema
 
+Siano $M$ e $N$ le dimensioni dell'immagine su cui applicare la convoluzione col kernel quadrato di dimensione $K$, la complessità del problema di Kernal Image Processing è $O(MNK^2)$.
 
 
 
@@ -21,17 +23,18 @@ Parallelizzare un programma sequenziale non significa solo “aggiungere thread�
        * Scegliere scheduling
        
   3. **Analisi della scalabilità teorica**:
-       * **Legge di Amdahl**: valutare il limite massimo dato dalla frazione sequenziale, mediante *strong scaling*.
+       * **Legge di Amdahl**: valutare il limite teorico dato dalla frazione sequenziale, mediante *strong scaling*.
        * **Legge di Gustafson**: valutare la bontà della parallelizzazione al crescere del problema, mediante *weak scaling*.
        
-  4. **Profiling del codice parallelo**
+  4. **Profiling del codice parallelo** in base ai risultati degli scaling:
+       * Profilare i problemi che hanno generato comportamenti inattesi o invalidanti alla parallelizzazione, col fine di determinarne le cause.
 
   5. **Analisi** del profiling ponderata ai risultati dello strong/weak scaling:
        * **Quantificare l’efficacia della parallelizzazione**: quanto spingersi con il numero di core.
        * **Individuare colli di bottiglia**: memoria, load balance, sincronizzazioni, comunicazioni, etc.
        * **Guidare lo sviluppo**: capire se conviene lavorare sugli overhead, oppure ridisegnare l’algoritmo.
   
-  6. **Ripetere** profiling > tuning > scaling finché non si raggiunge un compromesso accettabile.
+  6. **Ripetere** tuning > scaling > profiling > analysis finché non si raggiunge un compromesso accettabile.
 
 
 ### Strong Scaling
@@ -46,7 +49,7 @@ Una volta fissata la dimensione del problema, all'aumentare del numero di core v
 dalle quali si ottengono e valutano i grafici:
 
 * **Tempo vs core**: ci si aspetta una decrescita quasi iperbolica ($T(p) \approx T(1)/p$).
-* **Speedup vs core**: la curva reale dovrebbe avvicinarsi alla diagonale ideale ($S(p) = p$).
+* **Speedup vs core**: la curva reale dovrebbe avvicinarsi alla diagonale ideale ($S(p) = p$). Se le curve distano molto al variare dei core, c'è un qualche problema di overhead/sbilanciamento dei dati che vale la pena risolvere prima di procedere con le analisi successive, dato che queste ultime si basano sulla bontà della stima di Amdahl.
 * **Efficienza strong vs core**: tipicamente cala oltre una certa soglia (limiti di Amdahl). Se l’efficienza crolla presto ⇒ overhead di sincronizzazione o parte sequenziale troppo pesante.
 
 
