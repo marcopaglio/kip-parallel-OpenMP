@@ -71,7 +71,7 @@ dalle quali si ottengono e valutano i grafici:
 
 Il **weak scaling** serve a capire se il programma può **gestire problemi sempre più grandi** su più risorse.
 
-Aumentando il numero di core *fisici*, si aumenta anche il numero di dati in modo tale che la dimensione del problema *per core* rimanga costante, e vengono calcolate le seguenti metriche: 
+Viene scelta l'**unità di lavoro** $W_0$, per poi aumentare il numero di core *fisici* $p$, e di conseguenza il numero di dati $W(p) = p \cdot W_0$, in modo tale che la dimensione del problema *per core* rimanga costante, e vengono calcolate le seguenti metriche: 
   * **Weak efficiency**: $E_w(p) = \frac{T(1)}{T(p)}$ (tempo atteso costante).
   * **Scaled speedup**: $S_w(p) = \frac{p \cdot T(1)}{T(p)}$.
   * **Throughput**: lavoro eseguito per unità di tempo (Mpix/s, FLOP/s…).
