@@ -71,17 +71,24 @@ dalle quali si ottengono e valutano i grafici:
 
 Il **weak scaling** serve a capire se il programma può **gestire problemi sempre più grandi** su più risorse.
 
-Viene scelta l'**unità di lavoro** $W_0$, per poi aumentare il numero di core *fisici* $p$, e di conseguenza il numero di dati $W(p) = p \cdot W_0$, in modo tale che la dimensione del problema *per core* rimanga costante, e vengono calcolate le seguenti metriche: 
-  * **Weak efficiency**: $E_w(p) = \frac{T(1)}{T(p)}$ (tempo atteso costante).
+Viene scelta l'**unità di lavoro** $W_0$, per poi aumentare il numero di core *fisici* $p$ e di conseguenza la dimensione del problema $W(p) = p \cdot W_0$, in modo tale che il numero di dati *per core* rimanga costante. L'unità di lavoro $W_0$ dev'essere sufficientemente grande da compensare l'overhead di parallelizzazione, e allo stesso tempo la memoria RAM totale richiesta sia sostenibile dal sistema per evitare swapping. Vengono calcolate le seguenti metriche: 
+  * **Weak efficiency**: $E_w(p) = \frac{T(1)}{T(p)}$, dove $T$ è il tempo medio su più ripetizioni (per ridurre il rumore).
   * **Scaled speedup**: $S_w(p) = \frac{p \cdot T(1)}{T(p)}$.
-  * **Throughput**: lavoro eseguito per unità di tempo (Mpix/s, FLOP/s…).
+  * **Throughput**: $Throughput(p) = \frac{W(p)}{T(p)} = \frac{p \cdot W_0}{T(p)}$ è il lavoro eseguito per unità di tempo (Mpix/s).
 
 dalle quali si ottengono e valutano i seguenti grafici:
   * **Tempo vs core**: ideale è costante. Un aumento segnala overhead di comunicazione o memoria.
-  * **Weak efficiency vs core**: ideale 100%. Accettabile ≥ 80–90% in HPC. Se l’efficienza cala ⇒ colli di bottiglia in memoria, comunicazioni, o load balancing.
+  * **Weak efficiency vs core**: ideale 100%. Accettabile ≥ 80–90% in HPC. Se l’efficienza cala, possibili cause sono:
+      + comunicazione crescente
+      + contesa sulle risorse (memoria, I/O)
+      + overhead di sincronizzazione
+      + load balancing
   * **Scaled speedup vs core**: dovrebbe seguire la diagonale $y = p$.
-  * **Throughput vs core**: ideale cresce linearmente ($p \cdot \text{Throughput}_1$), quello reale tende a saturarsi.
+  * **Throughput vs core**: ideale cresce linearmente col numero di core, i.e. $p \cdot Throughput(1)$; quello reale tende a saturarsi.
 
+N.B: Weak scaling non è appropriato su problemi:
+  * *Global reductions*: riduzioni globali dimostrano costi crescenti con p.
+  * il cui costo per unità lavoro cambia con costi non proporzionali (e.g. $O(n log n)$ ).
 
 ### Linear Fit
 
