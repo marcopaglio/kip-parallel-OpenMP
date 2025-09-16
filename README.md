@@ -22,11 +22,14 @@ Parallelizzare un programma sequenziale non significa solo “aggiungere thread�
        * Privatizzare le variabili
        * Scegliere scheduling
        
-  3. **Analisi della scalabilità teorica**:
+  3. **Analisi della scalabilità teorica** al crescrere del numero di core *fisici* utilizzati fino a saturazione delle risorse:
        * **Legge di Amdahl**: valutare il limite teorico dato dalla frazione sequenziale, mediante [*strong scaling*](#strong-scaling).
        * **Legge di Gustafson**: valutare la bontà della parallelizzazione al crescere del problema, mediante [*weak scaling*](#weak-scaling).
        
-  4. **Profiling del codice parallelo** sui problemi che hanno generato comportamenti inattesi sugli scaling, col fine di determinarne le cause:
+  4. **Profiling del codice parallelo** applicato ai problemi che hanno generato comportamenti inattesi (teoria $\neq$ pratica) sugli scaling, col fine di:
+       * **Quantificare l’efficacia della parallelizzazione**: quanto spingersi con il numero di core.
+       * **Individuare colli di bottiglia e problematiche**: memoria, load balance, sincronizzazioni, comunicazioni, etc.
+       * **Guidare lo sviluppo**: capire se conviene lavorare sugli overhead, oppure ridisegnare l’algoritmo.
        
        |    Analysis       |      Cosa cercare       |        Possibili cause       |     Azioni consigliate     |
        |:-----------------:|:-----------------------:|:----------------------------:|:--------------------------:|
@@ -37,16 +40,11 @@ Parallelizzare un programma sequenziale non significa solo “aggiungere thread�
        |                   |                         | *Sync overhead*              | rimuovere/ridurre barriere |
        |                   |                         |                              |                            |
        | **Memory Access** | banda di memoria satura | *Bottleneck memoria*         | migliorare locality        |
-       |                   |                         |                              | tiling/blocking            |
+       |                   |  poor core utilization  |                              | tiling/blocking            |
        |                   |                         |                              | migliorare uso cache       |
        |                   |                         |                              | ridurre traffico memoria   |
-
-  6. **Analisi** del profiling ponderata ai risultati dello strong/weak scaling:
-       * **Quantificare l’efficacia della parallelizzazione**: quanto spingersi con il numero di core.
-       * **Individuare colli di bottiglia e problematiche**: memoria, load balance, sincronizzazioni, comunicazioni, etc.
-       * **Guidare lo sviluppo**: capire se conviene lavorare sugli overhead, oppure ridisegnare l’algoritmo.
   
-  7. **Ripetere** tuning > scaling > profiling > analysis finché non si raggiunge un compromesso accettabile.
+  7. **Ripetere** tuning > scaling > profiling finché non si raggiunge un compromesso accettabile.
 
 
 ### Strong Scaling
@@ -85,15 +83,6 @@ dalle quali si ottengono e valutano i seguenti grafici:
   * **Throughput vs core**: ideale cresce linearmente ($p \cdot \text{Throughput}_1$), quello reale tende a saturarsi.
 
 
-### Quando fermarsi
-
-I grafici vanno letti congiuntamente per capire **se conviene scalare su più core, se serve un redesign, o se il programma è già vicino al massimo teorico**:
-
-   * Se **throughput scala bene** ma **tempo non cala**: l’algoritmo è adatto a problemi grandi, non a tempi ridotti.
-   * Se **strong scaling è buono** ma **weak inefficiente**: l’algoritmo gestisce bene problemi fissi ma non cresce bene.
-   * Se entrambi sono scarsi: serve un redesign dell’algoritmo.
-
-
 ### Linear Fit
 
 La stima media di $f$, con $0 \leq f \leq 1$, si può ottenere come regressione lineare dei $f(p)$, con $p > 1$, secondo il seguente procedimento:
@@ -109,3 +98,28 @@ Il valore così calcolato di $f$ è più robusto perchè utilizza tutti i punti 
   * Se $f$ è basso ma lo speedup si appiattisce > possibile memory bandwidth > agire su locality, blocking, riduzione traffico memoria.
 
 
+
+
+### Quando fermarsi
+
+I grafici vanno letti congiuntamente per capire **se conviene scalare su più core, se serve un redesign, o se il programma è già vicino al massimo teorico**:
+
+   * Se **throughput scala bene** ma **tempo non cala**: l’algoritmo è adatto a problemi grandi, non a tempi ridotti.
+   * Se **strong scaling è buono** ma **weak inefficiente**: l’algoritmo gestisce bene problemi fissi ma non cresce bene.
+   * Se entrambi sono scarsi: serve un redesign dell’algoritmo.
+
+Amdahl: utile per capire se la parallelizzazione è “sufficiente” rispetto al problema dato:
+  * Seleziono un problema di dimensione fissa e valuto la curva di strong scaling fino a saturazione delle risorse (aumentando il numero di core utilizzati)
+Gustafson: utile per capire se il programma resta efficiente su problemi grandi (tipico in HPC):
+  * Una volta che il codice scala “ragionevolmente” in strong scaling (cioè senza inefficienze banali), esegui il weak scaling per valutare quanto bene la tua applicazione rimane performante quando cresce il problema.
+  * Se strong scaling va male → prima ottimizza, altrimenti il weak scaling non ha senso (avrai inefficienze ovunque).
+  * Se strong scaling va bene, ma il weak scaling mostra caduta di efficienza → il collo di bottiglia non è la parte sequenziale, ma la comunicazione e la memoria che crescono con la dimensione del problema.
+  * usa weak scaling in parallelo allo strong scaling, non come fase finale. Perché serve a capire se l’algoritmo rimane efficiente man mano che cresce il problema, non solo dopo aver “spremuto” lo strong scaling.
+
+È lo step in cui verifichi se la tua parallelizzazione rimane utile su grandi macchine o se l’aumento di memoria/comunicazioni distrugge l’efficienza.
+Strong e weak scaling forniscono macro-indizi *se* vi sono possibili problematiche o miglioramenti; il profiling serve come micro-diagnosi per cercare *dove* sono le problematiche o i miglioramenti.
+
+Criteri pratici per fermarsi:
+  * Marginal speedup: $\Delta{S}=S(p) - S(p/2)$, considerando di raddoppiare $p$ ad ogni step, scende sotto ~10–20% → poco valore ad aumentare p.
+  * Efficienza: quando $E(p) < 50%$
+  * Tempo: se $T(p)$ non migliora ($>~5%$) raddoppiando $p$, usa il $p$ più basso che dà lo stesso tempo.
