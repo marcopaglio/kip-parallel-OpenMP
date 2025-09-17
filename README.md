@@ -51,7 +51,7 @@ Parallelizzare un programma sequenziale non significa solo “aggiungere thread�
 
 Lo **strong scaling** serve a capire se il programma può diventare più veloce.
 
-Una volta fissata la dimensione del problema, all'aumentare del numero di core *fisici* $p$ vengono calcolate le seguenti metriche:
+Una volta fissata la dimensione del problema, all'aumentare del numero di core $p$ vengono calcolate le seguenti metriche:
   * **Speedup**: $S(p) = \frac{T(1)}{T(p)}$, dove $T(p)$ è il tempo misurato con $p$ core.
   * **Efficienza strong**: $E(p) = \frac{S(p)}{p}$.
   * **Serial fraction di Karp–Flatt**: $f(p) = \frac{1/S(p) - 1/p}{1 - 1/p}$ misura la porzione sequenziale assieme all’overhead di parallelizzazione.
@@ -71,7 +71,7 @@ dalle quali si ottengono e valutano i grafici:
 
 Il **weak scaling** serve a capire se il programma può **gestire problemi sempre più grandi** su più risorse.
 
-Viene scelta l'**unità di lavoro** $W_0$, per poi aumentare il numero di core *fisici* $p$ e di conseguenza la dimensione del problema $W(p) = p \cdot W_0$, in modo tale che il numero di dati *per core* rimanga costante. L'unità di lavoro $W_0$ dev'essere sufficientemente grande da compensare l'overhead di parallelizzazione, e allo stesso tempo la memoria RAM totale richiesta sia sostenibile dal sistema per evitare swapping. 
+Viene scelta l'**unità di lavoro** $W_0$, per poi aumentare il numero di core $p$ e di conseguenza la dimensione del problema $W(p) = p \cdot W_0$, in modo tale che il numero di dati *per core* rimanga costante. L'unità di lavoro $W_0$ dev'essere sufficientemente grande da compensare l'overhead di parallelizzazione, e allo stesso tempo la memoria RAM totale richiesta sia sostenibile dal sistema per evitare swapping. 
 
 Vengono calcolate le seguenti metriche: 
   * **Weak efficiency**: $E_{W_0}(p) = \frac{T(1)}{T(p)}$, dove $T$ è il tempo medio su più ripetizioni (per ridurre il rumore).
@@ -96,7 +96,7 @@ dalle quali si ottengono e valutano i seguenti grafici:
 
 La complessità del problema di Kernal Image Processing è $O(MNK^2)$, dove $M$ e $N$ sono le dimensioni dell'immagine su cui applicare la convoluzione, e $K$ quella del kernel quadrato.
 
-Lo weak scaling richiedere di mantenere costante il lavoro per core, i.e. $MNK^2/p$, per cui l’unità naturale è il numero di pixel per core. Tuttavia, le dimensioni delle immagini a disposizione sono limitate (vedi [Images](https://github.com/marcopaglio/kip-sequential?tab=readme-ov-file#images)), e la scelta più semplice è di considerare un’unica dimensione (e.g. 4000x2000) e ripetere la stessa immagine più volte fino a raggiungere il totale richiesto, mantenendo a sua volta la dimensione del kernel costante. Nel particolare, si è scelto di impilare le immagini una sopra l'altra, i.e. da $(M, N)$ a $(M, pN)$.
+Lo weak scaling richiedere di mantenere costante il lavoro per core, i.e. $MNK^2/p$, per cui l’unità naturale è il numero di pixel per core. Tuttavia, le dimensioni delle immagini a disposizione sono limitate (vedi [Images](https://github.com/marcopaglio/kip-sequential?tab=readme-ov-file#images)), e la scelta più semplice è di considerare un’unica dimensione (e.g. 4000x2000) e ripetere la stessa immagine più volte fino a raggiungere il totale richiesto, mantenendo a sua volta la dimensione del kernel costante; in particolare, si è scelto di *impilare* le immagini una sopra l'altra, cioè da $(M, N)$ si passa a $(M, pN)$.
 
 > :bulb: **tip**: In alternativa, si potrebbe pensare di compensare la crescita dei core aumentando il kernel size invece della dimensione dell’immagine. Tuttavia, $K$ partecipa in proporzione quadratica alla complessità del problema per cui risulta difficile ottenere valori interi di $K$ che mantengono il lavoro per core costante. E.g: se per $p=1$ si utilizza $K_1=10$, per $p=2$ dovremmo scegliere $K_2=\sqrt{2} K_1=14.142...$ 
 
@@ -116,7 +116,7 @@ Il valore così calcolato di $f$ è più robusto perchè utilizza tutti i punti 
 
 
 
-### Quando fermarsi
+### Analisi dei grafici
 
 I grafici vanno letti congiuntamente per capire **se conviene scalare su più core, se serve un redesign, o se il programma è già vicino al massimo teorico**:
   * Se **strong scaling va male** > prima ottimizza, altrimenti il weak scaling non ha senso (ci saranno inefficienze ovunque).
@@ -127,6 +127,18 @@ I grafici vanno letti congiuntamente per capire **se conviene scalare su più co
 > :pencil: **Note**: usare weak scaling in parallelo allo strong scaling, non come fase finale. Perché serve a capire se l’algoritmo rimane efficiente man mano che cresce il problema, non solo dopo aver “spremuto” lo strong scaling.
 
 > :pencil: **Note**:Strong e weak scaling forniscono macro-indizi *se* vi sono possibili problematiche o miglioramenti; il profiling serve come micro-diagnosi per cercare *dove* sono le problematiche o i miglioramenti.
+
+#### Core Fisici vs. virtuali
+
+I **core fisici** sono unità di calcolo indipendenti, ciascuno dei quali può esporre 2 (o più) **core logici** (e.g. thread virtuali/HT/SMT); pertanto, questi ultimi condividono risorse hardware con il core fisico cui appartengono (pipeline, cache, ALU, unità di esecuzione).
+
+Poiché i core logici non aumentano la potenza di calcolo, l'esito del loro utilizzo dipende dal workload:
+  * Se è *latency-bound* o con tanti stall per cache miss > i thread logici possono aiutare a tenere occupata l’unità di calcolo, con aumento delle prestazioni fino al 20–30%.
+  * Se è *compute-bound* e le risorse sono già sature > zero benefici, o addirittura peggioramenti dell’efficienza a causa di contenzione interna.
+
+Lo scaling su thread logici può produrre risultati ingannevoli, per cui in genere conviene utilizzare solo i core fisici. Ciò non significa che non vadano usati, ma in tal caso i dati vanno interpretati diversamente.
+
+### Quando fermarsi
 
 Criteri pratici per fermarsi:
   * Marginal speedup: $\Delta{S}=S(p) - S(p/2)$, considerando di raddoppiare $p$ ad ogni step, scende sotto ~10–20% → poco valore ad aumentare p.
