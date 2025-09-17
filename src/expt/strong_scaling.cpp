@@ -20,6 +20,15 @@
 
 int main() {
 #ifdef _OPENMP
+    // !!! Before calling any OpenMP construct !!!
+    // Guarantee of physical core usage (if enough)
+#ifdef _WIN32
+    _putenv_s("OMP_PROC_BIND", "TRUE");
+    _putenv_s("OMP_PLACES",    "cores");
+#elif __unix__
+    setenv("OMP_PROC_BIND", "TRUE", 1);
+    setenv("OMP_PLACES",   "cores", 1);
+#endif
     const int maxNumThreads = omp_get_max_threads();
 #else
     const int maxNumThreads = 1;

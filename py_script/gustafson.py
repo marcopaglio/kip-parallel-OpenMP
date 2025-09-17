@@ -10,7 +10,7 @@ import sys
 #                           in order to consider it as a good time (bad values
 #                           are printed in red).
 #
-def plotWeakScaling(csv_filename = "../data/kip_openMP_weakScaling.csv", 
+def plotWeakScaling(csv_filename = "../data/kip_openMP_weakScaling.csv", phys_cores = 8, 
                     min_efficiency = 0.7, max_relative_time = 1.3):
     min_relative_throughput = min_efficiency
     
@@ -34,7 +34,22 @@ def plotWeakScaling(csv_filename = "../data/kip_openMP_weakScaling.csv",
         
         ### FIRST PART: Gustafson - Scaled Speedup
         plt.figure(figsize=(7,5))
+    
+        plt.axvline(x=phys_cores, color="black", linestyle="--",
+                    linewidth=1.5, alpha=0.6, label="Max physical threads")
+        plt.axvspan(phys_cores, subgroup["NumThreads"].max(),
+                    color="black", alpha=0.1, label="Logical threads zone")
+        
         plt_color = "green"
+        plt.plot(
+            subgroup["NumThreads"],
+            subgroup["NumThreads"],
+            linestyle="--",
+            color=plt_color,
+            alpha=0.4,
+            label="ideal speedup (y=p)"
+        )
+        
         plt.plot(
             subgroup["NumThreads"], 
             subgroup["ScaledSpeedUp"], 
@@ -47,15 +62,6 @@ def plotWeakScaling(csv_filename = "../data/kip_openMP_weakScaling.csv",
         for x, y in zip(subgroup["NumThreads"], subgroup["ScaledSpeedUp"]):
             plt.annotate(f"{y:.2f}", (x, y), xytext=(-10, -5), textcoords="offset points",
                 ha="center", va="top", fontsize=8)
-        
-        plt.plot(
-            subgroup["NumThreads"],
-            subgroup["NumThreads"],
-            linestyle="--",
-            color=plt_color,
-            alpha=0.4,
-            label="ideal speedup (y=p)"
-        )
         
         plt.xlabel("Threads number (p)")
         plt.ylabel("Scaled Speedup")
@@ -79,6 +85,11 @@ def plotWeakScaling(csv_filename = "../data/kip_openMP_weakScaling.csv",
         
         ### SECOND PART: Show weak scaling, i.e. Efficiency vs Throughput vs Time
         fig, ax1 = plt.subplots(figsize=(9,6))
+            
+        ax1.axvline(x=phys_cores, color="black", linestyle="--",
+                    linewidth=1.5, alpha=0.6, label="Max physical threads")
+        ax1.axvspan(phys_cores, subgroup["NumThreads"].max(),
+                    color="black", alpha=0.1, label="Logical threads zone")
 
         # First axis for Weak Efficiency (misura la vicinanza al comportamento ideale, i.e efficiency=1)
         ax1_color="#1f77b4"
@@ -209,5 +220,11 @@ if __name__ == "__main__":
     params = {}
     if len(sys.argv) > 1:
         params["csv_filename"] = sys.argv[1]
+    if len(sys.argv) > 2:
+        params["phys_cores"] = int(sys.argv[2])
+    if len(sys.argv) > 3:
+        params["min_efficiency"] = float(sys.argv[3])
+    if len(sys.argv) > 4:
+        params["max_relative_time"] = float(sys.argv[4])
 
     plotWeakScaling(**(params))
