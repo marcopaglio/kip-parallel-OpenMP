@@ -26,7 +26,7 @@ Parallelizzare un programma sequenziale non significa solo “aggiungere thread�
        * **Legge di Amdahl**: valutare il limite teorico dato dalla frazione sequenziale, mediante [*strong scaling*](#strong-scaling).
        * **Legge di Gustafson**: valutare la bontà della parallelizzazione al crescere del problema, mediante [*weak scaling*](#weak-scaling).
        
-  4. **Profiling del codice parallelo** applicato ai problemi che hanno generato comportamenti inattesi (teoria $\neq$ pratica) sugli scaling, col fine di:
+  4. **Profiling del codice parallelo** mirato ai problemi che hanno generato comportamenti inattesi (teoria $\neq$ pratica) sugli scaling, col fine di:
        * **Quantificare l’efficacia della parallelizzazione**: quanto spingersi con il numero di core.
        * **Individuare colli di bottiglia e problematiche**: memoria, load balance, sincronizzazioni, comunicazioni, etc.
        * **Guidare lo sviluppo**: capire se conviene lavorare sugli overhead, oppure ridisegnare l’algoritmo.
@@ -71,10 +71,12 @@ dalle quali si ottengono e valutano i grafici:
 
 Il **weak scaling** serve a capire se il programma può **gestire problemi sempre più grandi** su più risorse.
 
-Viene scelta l'**unità di lavoro** $W_0$, per poi aumentare il numero di core *fisici* $p$ e di conseguenza la dimensione del problema $W(p) = p \cdot W_0$, in modo tale che il numero di dati *per core* rimanga costante. L'unità di lavoro $W_0$ dev'essere sufficientemente grande da compensare l'overhead di parallelizzazione, e allo stesso tempo la memoria RAM totale richiesta sia sostenibile dal sistema per evitare swapping. Vengono calcolate le seguenti metriche: 
-  * **Weak efficiency**: $E_w(p) = \frac{T(1)}{T(p)}$, dove $T$ è il tempo medio su più ripetizioni (per ridurre il rumore).
-  * **Scaled speedup**: $S_w(p) = \frac{p \cdot T(1)}{T(p)}$.
-  * **Throughput**: $Throughput(p) = \frac{W(p)}{T(p)} = \frac{p \cdot W_0}{T(p)}$ è il lavoro eseguito per unità di tempo (Mpix/s).
+Viene scelta l'**unità di lavoro** $W_0$, per poi aumentare il numero di core *fisici* $p$ e di conseguenza la dimensione del problema $W(p) = p \cdot W_0$, in modo tale che il numero di dati *per core* rimanga costante. L'unità di lavoro $W_0$ dev'essere sufficientemente grande da compensare l'overhead di parallelizzazione, e allo stesso tempo la memoria RAM totale richiesta sia sostenibile dal sistema per evitare swapping. 
+
+Vengono calcolate le seguenti metriche: 
+  * **Weak efficiency**: $E_{W_0}(p) = \frac{T(1)}{T(p)}$, dove $T$ è il tempo medio su più ripetizioni (per ridurre il rumore).
+  * **Scaled speedup**: $S_{W_0}(p) = \frac{p \cdot T(1)}{T(p)}$.
+  * **Throughput**: $P_{W_0}(p) = \frac{W(p)}{T(p)} = \frac{p \cdot W_0}{T(p)}$ è il lavoro eseguito per unità di tempo (Mpix/s).
 
 dalle quali si ottengono e valutano i seguenti grafici:
   * **Tempo vs core**: ideale è costante. Un aumento segnala overhead di comunicazione o memoria.
@@ -84,11 +86,19 @@ dalle quali si ottengono e valutano i seguenti grafici:
       + overhead di sincronizzazione
       + load balancing
   * **Scaled speedup vs core**: dovrebbe seguire la diagonale $y = p$.
-  * **Throughput vs core**: ideale cresce linearmente col numero di core, i.e. $p \cdot Throughput(1)$; quello reale tende a saturarsi.
+  * **Throughput vs core**: ideale cresce linearmente col numero di core, i.e. $p \cdot P_{W_0}(1)$; quello reale tende a saturarsi.
 
-N.B: Weak scaling non è appropriato su problemi:
-  * *Global reductions*: riduzioni globali dimostrano costi crescenti con p.
-  * il cui costo per unità lavoro cambia con costi non proporzionali (e.g. $O(n log n)$ ).
+> :warning: **Warning**: weak scaling non è appropriato su problemi:
+>   * di *Global reductions*: riduzioni globali dimostrano costi crescenti con p.
+>   * il cui costo per unità lavoro cambia con costi non proporzionali (e.g. $O(n log n)$ ).
+
+#### L'unità di lavoro per kip
+
+La complessità del problema di Kernal Image Processing è $O(MNK^2)$, dove $M$ e $N$ sono le dimensioni dell'immagine su cui applicare la convoluzione, e $K$ quella del kernel quadrato.
+
+Lo weak scaling richiedere di mantenere costante il lavoro per core, i.e. $MNK^2/p$, per cui l’unità naturale è il numero di pixel per core. Tuttavia, le dimensioni delle immagini a disposizione sono limitate (vedi [Images](https://github.com/marcopaglio/kip-sequential?tab=readme-ov-file#images)), e la scelta più semplice è di considerare un’unica dimensione (e.g. 4000x2000) e ripetere la stessa immagine più volte fino a raggiungere il totale richiesto, mantenendo a sua volta la dimensione del kernel costante. Nel particolare, si è scelto di impilare le immagini una sopra l'altra, i.e. da $(M, N)$ a $(M, pN)$.
+
+> :bulb: **tip**: In alternativa, si potrebbe pensare di compensare la crescita dei core aumentando il kernel size invece della dimensione dell’immagine. Tuttavia, $K$ partecipa in proporzione quadratica alla complessità del problema per cui risulta difficile ottenere valori interi di $K$ che mantengono il lavoro per core costante. E.g: se per $p=1$ si utilizza $K_1=10$, per $p=2$ dovremmo scegliere $K_2=\sqrt{2} K_1=14.142...$ 
 
 ### Linear Fit
 
@@ -114,8 +124,9 @@ I grafici vanno letti congiuntamente per capire **se conviene scalare su più co
   * Se **strong scaling è buono** ma **weak inefficiente**: l’algoritmo gestisce bene problemi fissi ma non cresce bene > il collo di bottiglia non è la parte sequenziale, ma la comunicazione e la memoria che crescono con la dimensione del problema.
   * Se **throughput scala bene** ma **tempo non cala**: l’algoritmo è adatto a problemi grandi, non a tempi ridotti.
 
-N.B: usare weak scaling in parallelo allo strong scaling, non come fase finale. Perché serve a capire se l’algoritmo rimane efficiente man mano che cresce il problema, non solo dopo aver “spremuto” lo strong scaling.
-Strong e weak scaling forniscono macro-indizi *se* vi sono possibili problematiche o miglioramenti; il profiling serve come micro-diagnosi per cercare *dove* sono le problematiche o i miglioramenti.
+> :pencil: **Note**: usare weak scaling in parallelo allo strong scaling, non come fase finale. Perché serve a capire se l’algoritmo rimane efficiente man mano che cresce il problema, non solo dopo aver “spremuto” lo strong scaling.
+
+> :pencil: **Note**:Strong e weak scaling forniscono macro-indizi *se* vi sono possibili problematiche o miglioramenti; il profiling serve come micro-diagnosi per cercare *dove* sono le problematiche o i miglioramenti.
 
 Criteri pratici per fermarsi:
   * Marginal speedup: $\Delta{S}=S(p) - S(p/2)$, considerando di raddoppiare $p$ ad ogni step, scende sotto ~10–20% → poco valore ad aumentare p.
