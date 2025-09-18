@@ -75,18 +75,20 @@ Viene scelta l'**unità di lavoro** $W_0$, per poi aumentare il numero di core $
 
 Vengono calcolate le seguenti metriche: 
   * **Weak efficiency**: $E_{W_0}(p) = \frac{T(1)}{T(p)}$, dove $T$ è il tempo medio su più ripetizioni (per ridurre il rumore).
-  * **Scaled speedup**: $S_{W_0}(p) = \frac{p \cdot T(1)}{T(p)}$.
+  * **Scaled speedup**: $S_{W_0}(p) = p \cdot E_{W_0}(p) = \frac{p \cdot T(1)}{T(p)}$.
   * **Throughput**: $P_{W_0}(p) = \frac{W(p)}{T(p)} = \frac{p \cdot W_0}{T(p)}$ è il lavoro eseguito per unità di tempo (Mpix/s).
 
 dalle quali si ottengono e valutano i seguenti grafici:
-  * **Tempo vs core**: ideale è costante. Un aumento segnala overhead di comunicazione o memoria.
+  * **Tempo vs core**: ideale è costante. Un aumento segnala overhead di comunicazione o memoria. Idealmente è costante perché ogni thread lavora sulla stessa unità di lavoro $W_0$:
+      + Se cresce > overhead di comunicazione/sincronizzazione o saturazione di banda memoria.
+      + Se decresce > qualche effetto collaterale positivo (cache locality, schedulazione più efficiente, ecc.), ma è raro e spesso sospetto.  
   * **Weak efficiency vs core**: ideale 100%. Accettabile ≥ 80–90% in HPC. Se l’efficienza cala, possibili cause sono:
       + comunicazione crescente
       + contesa sulle risorse (memoria, I/O)
       + overhead di sincronizzazione
       + load balancing
-  * **Scaled speedup vs core**: dovrebbe seguire la diagonale $y = p$.
-  * **Throughput vs core**: ideale cresce linearmente col numero di core, i.e. $p \cdot P_{W_0}(1)$; quello reale tende a saturarsi.
+  * **Scaled speedup vs core**: Se rimane vicino alla diagonale $y = p$ significa che il programma scala bene. 
+  * **Throughput vs core**: idealmente la produttività dovrebbe crescere linearmente col numero di core, i.e. $P_{ideal}(p) = p \cdot P_{W_0}(1)$; quella reale tende ad appiattirsi a causa di overhead (sincronizzazioni, memory bottleneck, NUMA effects, etc), o addirittura peggiorare per saturazione delle risorse (e.g. bandwidth di memoria).
 
 > :warning: **Warning**: weak scaling non è appropriato su problemi:
 >   * di *Global reductions*: riduzioni globali dimostrano costi crescenti con p.
@@ -136,7 +138,14 @@ Poiché i core logici non aumentano la potenza di calcolo, l'esito del loro util
   * Se è *latency-bound* o con tanti stall per cache miss > i thread logici possono aiutare a tenere occupata l’unità di calcolo, con aumento delle prestazioni fino al 20–30%.
   * Se è *compute-bound* e le risorse sono già sature > zero benefici, o addirittura peggioramenti dell’efficienza a causa di contenzione interna.
 
-Lo scaling su thread logici può produrre risultati ingannevoli, per cui in genere conviene utilizzare solo i core fisici. Ciò non significa che non vadano usati, ma in tal caso i dati vanno interpretati diversamente.
+Lo scaling su thread logici può produrre risultati ingannevoli, per cui in genere conviene utilizzare solo i core fisici. Ciò non significa che non vadano usati, ma in tal caso i dati vanno interpretati adeguatamente.
+
+Su OpenMP si può garantire la suddivisione dei thread su core differenti impostando le seguenti variabili d'ambiente:
+```
+OMP_PLACES=cores
+OMP_PROC_BIND=TRUE
+```
+Qualora le richieste superino il massimo numero di core fisici disponibili, OpenMP mapperà i thread anche sui core virtuali.
 
 ### Quando fermarsi
 
