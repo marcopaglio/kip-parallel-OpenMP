@@ -5,13 +5,14 @@ Parallelized version of Kernel Image Processing, i.e. kernel filtering applied t
 
 ## Complessità del problema
 
+TODO: aggiungi altrove
 Siano $M$ e $N$ le dimensioni dell'immagine su cui applicare la convoluzione col kernel quadrato di dimensione $K$, la complessità del problema di Kernal Image Processing è $O(MNK^2)$.
 
 
 
 ## Processo di parallelizzazione
 
-Parallelizzare un programma sequenziale non significa solo “aggiungere thread”, ma richiede un percorso metodico per evitare false parallelizzazioni, o addirittura rallentamenti, capire dove concentrare sforzi e analisi col fine di ottenere miglioramenti, e capire **quanto bene l’algoritmo** sia stato parallelizzato e quanto si possa ancora fare. A tal proposito, il workflow seguito in questo lavoro può essere così riassunto:
+Parallelizzare un programma sequenziale non significa solo “aggiungere thread”, ma richiede un percorso metodico per evitare false parallelizzazioni o addirittura rallentamenti, capire dove concentrare sforzi e analisi col fine di ottenere miglioramenti, e capire **quanto bene l’algoritmo** sia stato parallelizzato e quanto si possa ancora fare. A tal proposito, il workflow seguito in questo lavoro può essere così riassunto:
 
   1. **Profiling del codice sequenziale** (e.g. tramite VTune) per individuare dove intervenire:
        * Identificare gli *hotspot*, i.e. funzioni che consumano più tempo.
@@ -23,13 +24,10 @@ Parallelizzare un programma sequenziale non significa solo “aggiungere thread�
        * Scegliere scheduling
        
   3. **Analisi della scalabilità teorica** fino a saturazione delle risorse:
-       * **Legge di Amdahl**: valutare il limite teorico dato dalla frazione sequenziale, mediante [*strong scaling*](#strong-scaling).
-       * **Legge di Gustafson**: valutare la bontà della parallelizzazione al crescere del problema, mediante [*weak scaling*](#weak-scaling).
+       1. **Legge di Amdahl**: valutare il limite teorico dato dalla frazione sequenziale, mediante [*strong scaling*](#strong-scaling).
+       2. **Legge di Gustafson**: valutare la bontà della parallelizzazione al crescere del problema, mediante [*weak scaling*](#weak-scaling).
        
-  4. **Profiling del codice parallelo** mirato ai problemi che hanno generato comportamenti inattesi (teoria $\neq$ pratica) sugli scaling, col fine di:
-       * **Quantificare l’efficacia della parallelizzazione**: quanto spingersi con il numero di core.
-       * **Individuare colli di bottiglia e problematiche**: memoria, load balance, sincronizzazioni, comunicazioni, etc.
-       * **Guidare lo sviluppo**: capire se conviene lavorare sugli overhead, oppure ridisegnare l’algoritmo.
+  4. **Profiling del codice parallelo** mirato ai problemi che hanno generato comportamenti inattesi (teoria $\neq$ pratica) sugli scaling, col fine di determinarne le cause:
        
        |    Analysis       |      Cosa cercare       |        Possibili cause       |     Azioni consigliate     |
        |:-----------------:|:-----------------------:|:----------------------------:|:--------------------------:|
@@ -49,46 +47,44 @@ Parallelizzare un programma sequenziale non significa solo “aggiungere thread�
 
 ### Strong Scaling
 
-Lo **strong scaling** serve a capire se il programma può diventare più veloce.
+Lo **strong scaling** serve a capire se il programma può diventare più veloce. TODO: un po' banaletto come modo e non rispecchia il vero uso
 
-Una volta fissata la dimensione del problema, all'aumentare del numero di core $p$ vengono calcolate le seguenti metriche:
-  * **Speedup**: $S(p) = \frac{T(1)}{T(p)}$, dove $T(p)$ è il tempo misurato con $p$ core.
-  * **Efficienza strong**: $E(p) = \frac{S(p)}{p}$.
-  * **Serial fraction di Karp–Flatt**: $f(p) = \frac{1/S(p) - 1/p}{1 - 1/p}$ misura la porzione sequenziale assieme all’overhead di parallelizzazione.
+Una volta fissata la dimensione del problema, all'aumentare del numero di thread $p$ vengono calcolate le seguenti metriche:
+  * **Wall-clock time**: $T(p)$ è il tempo medio su più ripetizioni (per ridurre il rumore):
+      + Ci si aspetta una decrescita quasi iperbolica ($T(p) \approx \frac{T(1)}{p}$).
+  * **Speedup**: $S(p) = \frac{T(1)}{T(p)}$:
+      + La curva dovrebbe avvicinarsi alla diagonale ideale ($S(p) = p$), ma, tenendo conto della frazione sequenziale $f$, l'andamento dovrebbe seguire la curva teorica di Amdahl usando la stima media di $f$ (vedi [Linear Fit](#linear-fit)).
+      + Se vi è forte divergenza al variare dei thread > overhead e/o sbilanciamento dei dati.
+  * **Efficienza strong**: $E(p) = \frac{S(p)}{p}$:
+      + Tipicamente cala oltre una certa soglia (limiti di Amdahl).
+      + Se l’efficienza crolla presto > overhead di sincronizzazione o parte sequenziale troppo pesante.
+      + Se aumenta bene fino a un certo numero di thread e poi si appiattisce > saturazione della memoria o sezioni sequenziali dominanti.
+  * **Karp–Flatt metric**: $f(p) = \frac{1/S(p) - 1/p}{1 - 1/p}$ misura la porzione sequenziale assieme all’overhead di parallelizzazione:
+      + Dovrebbe rimanere costante per avere una buona stima di Amdahl, fondamentale per l'accuratezza delle analisi.
+      + Se variano molto con $p$ > instabilità data da overhead di parallelizzazione (sync, memoria, false sharing, cache misses, etc) *che aumentano col numero di thread*.
 
-dalle quali si ottengono e valutano i grafici:
-* **Tempo vs core**: ci si aspetta una decrescita quasi iperbolica ($T(p) \approx T(1)/p$).
-* **Serial fraction vs core**: dovrebbe rimanere costante per avere una buona stima di Amdahl, fondamentale per l'accuratezza delle analisi:
-  + se variano molto con $p$ > instabilità data da overhead di parallelizzazione (sync, memoria, false sharing, cache misses, etc) *che aumentano col numero di core* > investire nel ridurre overhead/sbilanciamento.
 
-* **Speedup vs core**: la curva reale dovrebbe avvicinarsi alla diagonale ideale ($S(p) = p$), ma, tenendo conto della frazione sequenziale $f$, l'andamento dovrebbe seguire la curva teorica di Amdahl usando la stima media di $f$ (vedi [Linear Fit](#linear-fit)):
-  + Se vi è forte divergenza al variare dei core > overhead e/o sbilanciamento dei dati.
-* **Efficienza strong vs core**: tipicamente cala oltre una certa soglia (limiti di Amdahl):
-  + Se l’efficienza crolla presto > overhead di sincronizzazione o parte sequenziale troppo pesante.
-  + Se aumenta bene fino a un certo numero di thread e poi si appiattisce > saturazione della memoria o sezioni sequenziali dominanti.
 
 ### Weak Scaling
 
 Il **weak scaling** serve a capire se il programma può **gestire problemi sempre più grandi** su più risorse.
 
-Viene scelta l'**unità di lavoro** $W_0$, per poi aumentare il numero di core $p$ e di conseguenza la dimensione del problema $W(p) = p \cdot W_0$, in modo tale che il numero di dati *per core* rimanga costante. L'unità di lavoro $W_0$ dev'essere sufficientemente grande da compensare l'overhead di parallelizzazione, e allo stesso tempo la memoria RAM totale richiesta sia sostenibile dal sistema per evitare swapping. 
+Viene scelta l'**unità di lavoro** $W_0$, per poi aumentare il numero di thread $p$ e di conseguenza la dimensione del problema $W(p) = p \cdot W_0$, in modo tale che il numero di dati *per thread* rimanga costante. L'unità di lavoro $W_0$ dev'essere sufficientemente grande da compensare l'overhead di parallelizzazione, e allo stesso tempo la memoria RAM totale richiesta sia sostenibile dal sistema per evitare swapping.
 
-Vengono calcolate le seguenti metriche: 
-  * **Weak efficiency**: $E_{W_0}(p) = \frac{T(1)}{T(p)}$, dove $T$ è il tempo medio su più ripetizioni (per ridurre il rumore).
-  * **Scaled speedup**: $S_{W_0}(p) = p \cdot E_{W_0}(p) = \frac{p \cdot T(1)}{T(p)}$, utile per validare la legge di Gustafson.
-  * **Throughput**: $P_{W_0}(p) = \frac{W(p)}{T(p)} = \frac{p \cdot W_0}{T(p)}$ indica il lavoro eseguito per unità di tempo (Mpix/s). 
-
-dalle quali si ottengono e valutano i seguenti grafici:
-  * **Tempo vs core**: ideale è costante. Un aumento segnala overhead di comunicazione o memoria. Idealmente è costante perché ogni thread lavora sulla stessa unità di lavoro $W_0$:
-      + Se cresce > overhead di comunicazione/sincronizzazione o saturazione di banda memoria.
-      + Se decresce > qualche effetto collaterale positivo (cache locality, schedulazione più efficiente, ecc.), ma è raro e spesso sospetto.  
-  * **Weak efficiency vs core**: ideale 100%. Accettabile ≥ 80–90% in HPC. Se l’efficienza cala, possibili cause sono:
-      + comunicazione crescente
-      + contesa sulle risorse (memoria, I/O)
-      + overhead di sincronizzazione
-      + load balancing
-  * **Scaled speedup vs core**: Se rimane vicino alla diagonale $y = p$ significa che il programma scala bene. 
-  * **Throughput vs core**: idealmente la produttività dovrebbe crescere linearmente col numero di thread, i.e. $P_{ideal}(p) = p \cdot P_{W_0}(1)$; quella reale tende ad appiattirsi a causa di overhead (sincronizzazioni, memory bottleneck, NUMA effects, etc), o addirittura peggiorare per saturazione delle risorse (e.g. bandwidth di memoria).
+Vengono calcolate le seguenti metriche:
+  * **Wall-clock time**: $T(p)$ è il tempo medio su più ripetizioni (per ridurre il rumore):
+      + Idealmente è costante perché ogni thread lavora sulla stessa unità di lavoro $W_0$.
+      + Se cresce > segnale di overhead di comunicazione/sincronizzazione o saturazione di banda di memoria.
+      + Se decresce > qualche effetto collaterale positivo (cache locality, schedulazione più efficiente, ecc.), ma è raro e spesso sospetto. 
+  * **Weak efficiency**: $E_{W_0}(p) = \frac{T(1)}{T(p)}$:
+      + Se rimane stabile vicino a 1 si ha un buon scaling.
+      + Se l’efficienza cala, possibili cause sono una comunicazione crescente, contesa sulle risorse (memoria, I/O), overhead di sincronizzazione, o problemi di load balancing.
+  * **Scaled speedup**: $S_{W_0}(p) = p \cdot E_{W_0}(p) = \frac{p \cdot T(1)}{T(p)}$, utile per validare la legge di Gustafson:
+      + Se rimane vicino alla diagonale $y = p$ significa che il programma scala bene.
+      + Se il grafico mostra un distacco crescente dalla linea ideale > lavorare sugli overhead (ridurre comunicazioni, migliore suddivisione del lavoro).
+  * **Throughput**: $P_{W_0}(p) = \frac{W(p)}{T(p)} = \frac{p \cdot W_0}{T(p)}$ indica il lavoro eseguito per unità di tempo (Mpix/s):
+      + Idealmente la produttività dovrebbe crescere linearmente col numero di thread, i.e. $P_{ideal}(p) = p \cdot P_{W_0}(1)$.
+      + La curva reale tende ad appiattirsi a causa di overhead (sincronizzazioni, memory bottleneck, NUMA effects, etc), o addirittura peggiorare per saturazione delle risorse (e.g. bandwidth di memoria).
 
 > :warning: **Warning**: weak scaling non è appropriato su problemi:
 >   * di *Global reductions*: riduzioni globali dimostrano costi crescenti con p.
@@ -98,22 +94,22 @@ dalle quali si ottengono e valutano i seguenti grafici:
 
 La complessità del problema di Kernal Image Processing è $O(MNK^2)$, dove $M$ e $N$ sono le dimensioni dell'immagine su cui applicare la convoluzione, e $K$ quella del kernel quadrato.
 
-Lo weak scaling richiedere di mantenere costante il lavoro per core, i.e. $MNK^2/p$, per cui l’unità naturale è il numero di pixel per core. Tuttavia, le dimensioni delle immagini a disposizione sono limitate (vedi [Images](https://github.com/marcopaglio/kip-sequential?tab=readme-ov-file#images)), e la scelta più semplice è di considerare un’unica dimensione (e.g. 4000x2000) e ripetere la stessa immagine più volte fino a raggiungere il totale richiesto, mantenendo a sua volta la dimensione del kernel costante; in particolare, si è scelto di *impilare* le immagini una sopra l'altra, cioè da $(M, N)$ si passa a $(M, pN)$.
+Lo weak scaling richiedere di mantenere costante il lavoro per thread, i.e. $MNK^2/p$, per cui l’unità naturale è il numero di pixel per thread. Tuttavia, le dimensioni delle immagini a disposizione sono limitate (vedi [Images](https://github.com/marcopaglio/kip-sequential?tab=readme-ov-file#images)), e la scelta più semplice è di considerare un’unica dimensione (e.g. 4000x2000) e ripetere la stessa immagine più volte fino a raggiungere il totale richiesto, mantenendo a sua volta la dimensione del kernel costante; in particolare, si è scelto di *impilare* le immagini una sopra l'altra, cioè da $(M, N)$ si passa a $(M, pN)$.
 
-> :bulb: **tip**: In alternativa, si potrebbe pensare di compensare la crescita dei core aumentando il kernel size invece della dimensione dell’immagine. Tuttavia, $K$ partecipa in proporzione quadratica alla complessità del problema per cui risulta difficile ottenere valori interi di $K$ che mantengono il lavoro per core costante. E.g: se per $p=1$ si utilizza $K_1=10$, per $p=2$ dovremmo scegliere $K_2=\sqrt{2} K_1=14.142...$ 
+> :bulb: **tip**: In alternativa, si potrebbe pensare di compensare la crescita dei thread aumentando il kernel size invece della dimensione dell’immagine. Tuttavia, $K$ partecipa in proporzione quadratica alla complessità del problema per cui risulta difficile ottenere valori interi di $K$ che mantengono il lavoro per thread costante. E.g: se per $p=1$ si utilizza $K_1=10$, per $p=2$ dovremmo scegliere $K_2=\sqrt{2} K_1=14.142...$ 
 
 ### Linear Fit
 
-La stima media di $f$, con $0 \leq f \leq 1$, si può ottenere come regressione lineare dei $f(p)$, con $p > 1$, secondo il seguente procedimento:
-  1. Legge di Amdahl: $S(p) = \frac{1}{f + (1-f)/p}$.
-  2. Invertire: $\frac{1}{S(p)} = f + \frac{1}{p}(1-f)$ equivalente ad un'equazione lineare nella forma $y = a + b \cdot x$ con $y = \frac{1}{S(p)}$, $x = \frac{1}{p}$, $a = f$, e $b = 1 - f$.
-  3. Una volta calcolati gli speedup $S(p)$, calcolare i relativi $y(p)$ e $x(p)$, dai quali ottenere una singola retta per regressione lineare di $y$ rispetto a $x$.
-  4. Calcolare il punto di intersezione della retta con l'asse $y$, i.e. $a = f$.
+La stima media di $f$, con $0 \leq f \leq 1$, si può ottenere come regressione lineare dei $f(p)$, con $p > 1$:
+  1. Si parte dalla legge di Amdahl: $S(p) = \frac{1}{f + (1-f)/p}$.
+  2. Si inverte la formula: $\frac{1}{S(p)} = f + \frac{1}{p}(1-f)$, ottenendo un'equazione lineare nella forma $y = a + b \cdot x$ con $y = \frac{1}{S(p)}$, $x = \frac{1}{p}$, $a = f$, e $b = 1 - f$.
+  3. Una volta calcolati gli speedup $S(p)$, si calcolano i relativi $y(p)$ e $x(p)$, dai quali si ottiene una singola retta per regressione lineare di $y$ rispetto a $x$.
+  4. Si calcola il punto di intersezione della retta con l'asse $y$, i.e. $a = f$.
 
 Il valore così calcolato di $f$ è più robusto perchè utilizza tutti i punti e permette di ridurre il rumore della singola stima:
-  * Se $f$ è alto > tanto sequenziale > redesign dell’algoritmo.
+  * Se $f$ è alto > sintomo di codice troppo sequenziale.
   * Se $f$ decresce dopo ottimizzazioni (meno sync, migliore bilanciamento, migliore locality) > si sta recuperando margine reale.
-  * Se $f$ è basso ma lo speedup si appiattisce > possibile memory bandwidth > agire su locality, blocking, riduzione traffico memoria.
+  * Se $f$ è basso ma lo speedup si appiattisce > possibile problema di memory bandwidth.
 
 
 
@@ -125,7 +121,11 @@ La valutazione dei grafici dovrebbe essere utile per:
   * Capire dove collassa (NUMA, cache, memoria, sincronizzazione).
   * Quantificare i colli di bottiglia in termini di perdita di efficienza o throughput.
 
-I grafici vanno letti congiuntamente per capire **se conviene scalare su più core, se serve un redesign, o se il programma è già vicino al massimo teorico**:
+* **Quantificare l’efficacia della parallelizzazione**: quanto spingersi con il numero di thread.
+       * **Individuare colli di bottiglia e problematiche**: memoria, load balance, sincronizzazioni, comunicazioni, etc.
+       * **Guidare lo sviluppo**: capire se conviene lavorare sugli overhead, oppure ridisegnare l’algoritmo.
+
+I grafici vanno letti congiuntamente per capire **se conviene scalare su più thread, se serve un redesign, o se il programma è già vicino al massimo teorico**:
   * Se **strong scaling va male** > prima ottimizza, altrimenti il weak scaling non ha senso (ci saranno inefficienze ovunque).
   * Una volta che il codice scala “ragionevolmente” in strong scaling (cioè senza inefficienze banali) > esegui il weak scaling per valutare quanto bene la tua applicazione rimane performante quando cresce il problema.
   * Se **strong scaling è buono** ma **weak inefficiente**: l’algoritmo gestisce bene problemi fissi ma non cresce bene > il collo di bottiglia non è la parte sequenziale, ma la comunicazione e la memoria che crescono con la dimensione del problema.
@@ -137,7 +137,7 @@ Linee guida operative:
       * Usa fino al punto in cui throughput continua a crescere e l’efficienza resta > ~0.7–0.8.
       * Oltre quel punto, più thread peggiorano solo il rapporto costi/benefici.
   2. Valida la scalabilità con lo Scaled Speedup:
-      * Se segue bene la linea ideale → il problema è ben parallelizzabile, puoi pensare di scalare su più core/macchine.
+      * Se segue bene la linea ideale → il problema è ben parallelizzabile, puoi pensare di scalare su più thread/macchine.
       * Se cala molto → serve lavorare su riduzione degli overhead (meno comunicazioni, migliore suddivisione del lavoro).
 Di conseguenza, Throughput+Efficienza → ti dice quanti thread ha senso usare; scaled Speedup → ti dice quanto bene scala davvero l’algoritmo.
 
