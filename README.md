@@ -75,8 +75,8 @@ Viene scelta l'**unità di lavoro** $W_0$, per poi aumentare il numero di core $
 
 Vengono calcolate le seguenti metriche: 
   * **Weak efficiency**: $E_{W_0}(p) = \frac{T(1)}{T(p)}$, dove $T$ è il tempo medio su più ripetizioni (per ridurre il rumore).
-  * **Scaled speedup**: $S_{W_0}(p) = p \cdot E_{W_0}(p) = \frac{p \cdot T(1)}{T(p)}$.
-  * **Throughput**: $P_{W_0}(p) = \frac{W(p)}{T(p)} = \frac{p \cdot W_0}{T(p)}$ è il lavoro eseguito per unità di tempo (Mpix/s).
+  * **Scaled speedup**: $S_{W_0}(p) = p \cdot E_{W_0}(p) = \frac{p \cdot T(1)}{T(p)}$, utile per validare la legge di Gustafson.
+  * **Throughput**: $P_{W_0}(p) = \frac{W(p)}{T(p)} = \frac{p \cdot W_0}{T(p)}$ indica il lavoro eseguito per unità di tempo (Mpix/s). 
 
 dalle quali si ottengono e valutano i seguenti grafici:
   * **Tempo vs core**: ideale è costante. Un aumento segnala overhead di comunicazione o memoria. Idealmente è costante perché ogni thread lavora sulla stessa unità di lavoro $W_0$:
@@ -88,7 +88,7 @@ dalle quali si ottengono e valutano i seguenti grafici:
       + overhead di sincronizzazione
       + load balancing
   * **Scaled speedup vs core**: Se rimane vicino alla diagonale $y = p$ significa che il programma scala bene. 
-  * **Throughput vs core**: idealmente la produttività dovrebbe crescere linearmente col numero di core, i.e. $P_{ideal}(p) = p \cdot P_{W_0}(1)$; quella reale tende ad appiattirsi a causa di overhead (sincronizzazioni, memory bottleneck, NUMA effects, etc), o addirittura peggiorare per saturazione delle risorse (e.g. bandwidth di memoria).
+  * **Throughput vs core**: idealmente la produttività dovrebbe crescere linearmente col numero di thread, i.e. $P_{ideal}(p) = p \cdot P_{W_0}(1)$; quella reale tende ad appiattirsi a causa di overhead (sincronizzazioni, memory bottleneck, NUMA effects, etc), o addirittura peggiorare per saturazione delle risorse (e.g. bandwidth di memoria).
 
 > :warning: **Warning**: weak scaling non è appropriato su problemi:
 >   * di *Global reductions*: riduzioni globali dimostrano costi crescenti con p.
@@ -120,11 +120,27 @@ Il valore così calcolato di $f$ è più robusto perchè utilizza tutti i punti 
 
 ### Analisi dei grafici
 
+La valutazione dei grafici dovrebbe essere utile per:
+  * Capire se il programma scala quando aggiungi thread.
+  * Capire dove collassa (NUMA, cache, memoria, sincronizzazione).
+  * Quantificare i colli di bottiglia in termini di perdita di efficienza o throughput.
+
 I grafici vanno letti congiuntamente per capire **se conviene scalare su più core, se serve un redesign, o se il programma è già vicino al massimo teorico**:
   * Se **strong scaling va male** > prima ottimizza, altrimenti il weak scaling non ha senso (ci saranno inefficienze ovunque).
   * Una volta che il codice scala “ragionevolmente” in strong scaling (cioè senza inefficienze banali) > esegui il weak scaling per valutare quanto bene la tua applicazione rimane performante quando cresce il problema.
   * Se **strong scaling è buono** ma **weak inefficiente**: l’algoritmo gestisce bene problemi fissi ma non cresce bene > il collo di bottiglia non è la parte sequenziale, ma la comunicazione e la memoria che crescono con la dimensione del problema.
   * Se **throughput scala bene** ma **tempo non cala**: l’algoritmo è adatto a problemi grandi, non a tempi ridotti.
+
+Linee guida operative:
+  1. Decidi quanti thread usare osservando il grafico Throughput+Efficienza:
+      * I grafici di throughput e weak efficiency, presi congiuntamente, sono utili per decidere fino a che numero di thread vale la pena parallelizzare, in base a fino a quando i valori registrati rimangono vicini a quelli ideali: il punto in cui il throughput smette di crescere in modo proporzionale e l’efficienza crolla corrisponde al numero massimo di thread utile da sfruttare in parallelo.
+      * Usa fino al punto in cui throughput continua a crescere e l’efficienza resta > ~0.7–0.8.
+      * Oltre quel punto, più thread peggiorano solo il rapporto costi/benefici.
+  2. Valida la scalabilità con lo Scaled Speedup:
+      * Se segue bene la linea ideale → il problema è ben parallelizzabile, puoi pensare di scalare su più core/macchine.
+      * Se cala molto → serve lavorare su riduzione degli overhead (meno comunicazioni, migliore suddivisione del lavoro).
+Di conseguenza, Throughput+Efficienza → ti dice quanti thread ha senso usare; scaled Speedup → ti dice quanto bene scala davvero l’algoritmo.
+
 
 > :pencil: **Note**: usare weak scaling in parallelo allo strong scaling, non come fase finale. Perché serve a capire se l’algoritmo rimane efficiente man mano che cresce il problema, non solo dopo aver “spremuto” lo strong scaling.
 
@@ -151,5 +167,6 @@ Qualora le richieste superino il massimo numero di core fisici disponibili, Open
 
 Criteri pratici per fermarsi:
   * Marginal speedup: $\Delta{S}=S(p) - S(p/2)$, considerando di raddoppiare $p$ ad ogni step, scende sotto ~10–20% → poco valore ad aumentare p.
-  * Efficienza: quando $E(p) < 50%$
+  * Efficienza: Un’efficienza sopra il 70% significa che l'utilizzo delle risorse è sufficientemente buono ed utile scalare su più thread o nodi; al di sotto, significa saturare le risorse e ulteriori thread non portano a benefici lineari.
   * Tempo: se $T(p)$ non migliora ($>~5%$) raddoppiando $p$, usa il $p$ più basso che dà lo stesso tempo.
+  * Throughput: sopra 70-90% l’algoritmo scala sufficientemente bene. Al di sotto, l'overhead diviene evidente e conviene fermarsi.
