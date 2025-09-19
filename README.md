@@ -27,20 +27,7 @@ Parallelizzare un programma sequenziale non significa solo “aggiungere thread�
        1. **Legge di Amdahl**: valutare il limite teorico dato dalla frazione sequenziale, mediante [*strong scaling*](#strong-scaling).
        2. **Legge di Gustafson**: valutare la bontà della parallelizzazione al crescere del problema, mediante [*weak scaling*](#weak-scaling).
        
-  4. **Profiling del codice parallelo** mirato ai problemi che hanno generato comportamenti inattesi (teoria $\neq$ pratica) sugli scaling, col fine di determinarne le cause:
-       
-       |    Analysis       |      Cosa cercare       |        Possibili cause       |     Azioni consigliate     |
-       |:-----------------:|:-----------------------:|:----------------------------:|:--------------------------:|
-       | **Hotspot**       | sezioni dominanti       | *codice sequenziale*         | parallelizzare             |
-       |                   |                         |                              |  ridisegnarre algoritmo    |
-       |                   |                         |                              |                            |
-       | **Threading**     | thread in idle          | *Load imbalance*             |             scheduling     |
-       |                   |                         | *Sync overhead*              | rimuovere/ridurre barriere |
-       |                   |                         |                              |                            |
-       | **Memory Access** | banda di memoria satura | *Bottleneck memoria*         | migliorare locality        |
-       |                   |  poor core utilization  |                              | tiling/blocking            |
-       |                   |                         |                              | migliorare uso cache       |
-       |                   |                         |                              | ridurre traffico memoria   |
+  4. **Profiling del codice parallelo** mirato ai problemi che hanno generato comportamenti inattesi (teoria $\neq$ pratica) sugli scaling, col fine di determinarne le cause.
   
   5. **Ripetere** tuning > scaling > profiling finché non si raggiunge un compromesso accettabile.
 
@@ -50,19 +37,22 @@ Parallelizzare un programma sequenziale non significa solo “aggiungere thread�
 Lo **strong scaling** serve a capire se il programma può diventare più veloce. TODO: un po' banaletto come modo e non rispecchia il vero uso
 
 Una volta fissata la dimensione del problema, all'aumentare del numero di thread $p$ vengono calcolate le seguenti metriche:
+
   * **Wall-clock time**: $T(p)$ è il tempo medio su più ripetizioni (per ridurre il rumore):
       + Ci si aspetta una decrescita quasi iperbolica ($T(p) \approx \frac{T(1)}{p}$).
+        
   * **Speedup**: $S(p) = \frac{T(1)}{T(p)}$:
       + La curva dovrebbe avvicinarsi alla diagonale ideale ($S(p) = p$), ma, tenendo conto della frazione sequenziale $f$, l'andamento dovrebbe seguire la curva teorica di Amdahl usando la stima media di $f$ (vedi [Linear Fit](#linear-fit)).
       + Se vi è forte divergenza al variare dei thread > overhead e/o sbilanciamento dei dati.
+        
   * **Efficienza strong**: $E(p) = \frac{S(p)}{p}$:
       + Tipicamente cala oltre una certa soglia (limiti di Amdahl).
       + Se l’efficienza crolla presto > overhead di sincronizzazione o parte sequenziale troppo pesante.
       + Se aumenta bene fino a un certo numero di thread e poi si appiattisce > saturazione della memoria o sezioni sequenziali dominanti.
+        
   * **Karp–Flatt metric**: $f(p) = \frac{1/S(p) - 1/p}{1 - 1/p}$ misura la porzione sequenziale assieme all’overhead di parallelizzazione:
       + Dovrebbe rimanere costante per avere una buona stima di Amdahl, fondamentale per l'accuratezza delle analisi.
       + Se variano molto con $p$ > instabilità data da overhead di parallelizzazione (sync, memoria, false sharing, cache misses, etc) *che aumentano col numero di thread*.
-
 
 
 ### Weak Scaling
@@ -71,24 +61,29 @@ Il **weak scaling** serve a capire se il programma può **gestire problemi sempr
 
 Viene scelta l'**unità di lavoro** $W_0$, per poi aumentare il numero di thread $p$ e di conseguenza la dimensione del problema $W(p) = p \cdot W_0$, in modo tale che il numero di dati *per thread* rimanga costante. L'unità di lavoro $W_0$ dev'essere sufficientemente grande da compensare l'overhead di parallelizzazione, e allo stesso tempo la memoria RAM totale richiesta sia sostenibile dal sistema per evitare swapping.
 
+> :warning: **Warning**: weak scaling non è appropriato su problemi:
+>   * di *Global reductions*: riduzioni globali dimostrano costi crescenti con p.
+>   * il cui costo per unità lavoro cambia con costi non proporzionali (e.g. $O(n log n)$ ).
+
 Vengono calcolate le seguenti metriche:
+
   * **Wall-clock time**: $T(p)$ è il tempo medio su più ripetizioni (per ridurre il rumore):
       + Idealmente è costante perché ogni thread lavora sulla stessa unità di lavoro $W_0$.
       + Se cresce > segnale di overhead di comunicazione/sincronizzazione o saturazione di banda di memoria.
-      + Se decresce > qualche effetto collaterale positivo (cache locality, schedulazione più efficiente, ecc.), ma è raro e spesso sospetto. 
+      + Se decresce > qualche effetto collaterale positivo (cache locality, schedulazione più efficiente, ecc.), ma è raro e spesso sospetto.
+        
   * **Weak efficiency**: $E_{W_0}(p) = \frac{T(1)}{T(p)}$:
       + Se rimane stabile vicino a 1 si ha un buon scaling.
       + Se l’efficienza cala, possibili cause sono una comunicazione crescente, contesa sulle risorse (memoria, I/O), overhead di sincronizzazione, o problemi di load balancing.
+        
   * **Scaled speedup**: $S_{W_0}(p) = p \cdot E_{W_0}(p) = \frac{p \cdot T(1)}{T(p)}$, utile per validare la legge di Gustafson:
       + Se rimane vicino alla diagonale $y = p$ significa che il programma scala bene.
-      + Se il grafico mostra un distacco crescente dalla linea ideale > lavorare sugli overhead (ridurre comunicazioni, migliore suddivisione del lavoro).
+      + Se il grafico mostra un distacco crescente dalla linea ideale > serve lavorare sugli overhead (ridurre comunicazioni, migliore suddivisione del lavoro).
+        
   * **Throughput**: $P_{W_0}(p) = \frac{W(p)}{T(p)} = \frac{p \cdot W_0}{T(p)}$ indica il lavoro eseguito per unità di tempo (Mpix/s):
       + Idealmente la produttività dovrebbe crescere linearmente col numero di thread, i.e. $P_{ideal}(p) = p \cdot P_{W_0}(1)$.
       + La curva reale tende ad appiattirsi a causa di overhead (sincronizzazioni, memory bottleneck, NUMA effects, etc), o addirittura peggiorare per saturazione delle risorse (e.g. bandwidth di memoria).
 
-> :warning: **Warning**: weak scaling non è appropriato su problemi:
->   * di *Global reductions*: riduzioni globali dimostrano costi crescenti con p.
->   * il cui costo per unità lavoro cambia con costi non proporzionali (e.g. $O(n log n)$ ).
 
 #### L'unità di lavoro per kip
 
@@ -111,44 +106,49 @@ Il valore così calcolato di $f$ è più robusto perchè utilizza tutti i punti 
   * Se $f$ decresce dopo ottimizzazioni (meno sync, migliore bilanciamento, migliore locality) > si sta recuperando margine reale.
   * Se $f$ è basso ma lo speedup si appiattisce > possibile problema di memory bandwidth.
 
+### Analisi dei dati
 
+I dati ottenuti dagli scaling servono a:
+  * **Quantificare l’efficacia della parallelizzazione** per decidere quanto spingersi con il numero di thread man mano che cresce il problema.
+  * **Individuare colli di bottiglia e problematiche** (e.g. memoria, load balance, sincronizzazioni, comunicazioni, etc) laddove si hanno perdite di efficienza.
+  * **Guidare lo sviluppo**: capire se conviene lavorare sugli overhead, ridisegnare l’algoritmo, oppure se il programma è già vicino al massimo teorico.
 
-
-### Analisi dei grafici
-
-La valutazione dei grafici dovrebbe essere utile per:
-  * Capire se il programma scala quando aggiungi thread.
-  * Capire dove collassa (NUMA, cache, memoria, sincronizzazione).
-  * Quantificare i colli di bottiglia in termini di perdita di efficienza o throughput.
-
-* **Quantificare l’efficacia della parallelizzazione**: quanto spingersi con il numero di thread.
-       * **Individuare colli di bottiglia e problematiche**: memoria, load balance, sincronizzazioni, comunicazioni, etc.
-       * **Guidare lo sviluppo**: capire se conviene lavorare sugli overhead, oppure ridisegnare l’algoritmo.
-
-I grafici vanno letti congiuntamente per capire **se conviene scalare su più thread, se serve un redesign, o se il programma è già vicino al massimo teorico**:
+A tal proposito, strong e weak scaling devono essere utilizzati *in parallelo*:
   * Se **strong scaling va male** > prima ottimizza, altrimenti il weak scaling non ha senso (ci saranno inefficienze ovunque).
   * Una volta che il codice scala “ragionevolmente” in strong scaling (cioè senza inefficienze banali) > esegui il weak scaling per valutare quanto bene la tua applicazione rimane performante quando cresce il problema.
+
+e i grafici vanno letti congiuntamente:
   * Se **strong scaling è buono** ma **weak inefficiente**: l’algoritmo gestisce bene problemi fissi ma non cresce bene > il collo di bottiglia non è la parte sequenziale, ma la comunicazione e la memoria che crescono con la dimensione del problema.
   * Se **throughput scala bene** ma **tempo non cala**: l’algoritmo è adatto a problemi grandi, non a tempi ridotti.
+  * Il punto in cui il **throughput smette di crescere** in modo proporzionale e l’**efficienza crolla** corrisponde al numero massimo di thread da sfruttare in parallelo.
 
-Linee guida operative:
-  1. Decidi quanti thread usare osservando il grafico Throughput+Efficienza:
-      * I grafici di throughput e weak efficiency, presi congiuntamente, sono utili per decidere fino a che numero di thread vale la pena parallelizzare, in base a fino a quando i valori registrati rimangono vicini a quelli ideali: il punto in cui il throughput smette di crescere in modo proporzionale e l’efficienza crolla corrisponde al numero massimo di thread utile da sfruttare in parallelo.
-      * Usa fino al punto in cui throughput continua a crescere e l’efficienza resta > ~0.7–0.8.
-      * Oltre quel punto, più thread peggiorano solo il rapporto costi/benefici.
-  2. Valida la scalabilità con lo Scaled Speedup:
-      * Se segue bene la linea ideale → il problema è ben parallelizzabile, puoi pensare di scalare su più thread/macchine.
-      * Se cala molto → serve lavorare su riduzione degli overhead (meno comunicazioni, migliore suddivisione del lavoro).
-Di conseguenza, Throughput+Efficienza → ti dice quanti thread ha senso usare; scaled Speedup → ti dice quanto bene scala davvero l’algoritmo.
+Strong e weak scaling forniscono macro-indizi *se* vi sono possibili problematiche o miglioramenti; dopodiché, il profiling serve come micro-diagnosi per cercare *dove* sono le problematiche o i miglioramenti:
+       
+|    Analysis       |      Cosa cercare       |        Possibili cause       |     Azioni consigliate     |
+|:-----------------:|:-----------------------:|:----------------------------:|:--------------------------:|
+| **Hotspot**       | sezioni dominanti       | *codice sequenziale*         | parallelizzare             |
+|                   |                         |                              | ridisegnarre algoritmo     |
+|                   |                         |                              |                            |
+| **Threading**     | thread in idle          | *Load imbalance*             | scheduling                 |
+|                   |                         | *Sync overhead*              | rimuovere/ridurre barriere |
+|                   |                         |                              |                            |
+| **Memory Access** | banda di memoria satura | *Bottleneck memoria*         | migliorare locality        |
+|                   | poor core utilization   |                              | tiling/blocking            |
+|                   |                         |                              | migliorare uso cache       |
+|                   |                         |                              | ridurre traffico memoria   |
 
 
-> :pencil: **Note**: usare weak scaling in parallelo allo strong scaling, non come fase finale. Perché serve a capire se l’algoritmo rimane efficiente man mano che cresce il problema, non solo dopo aver “spremuto” lo strong scaling.
+#### Quando fermarsi
 
-> :pencil: **Note**:Strong e weak scaling forniscono macro-indizi *se* vi sono possibili problematiche o miglioramenti; il profiling serve come micro-diagnosi per cercare *dove* sono le problematiche o i miglioramenti.
+Si consideri di raddoppiare il numero di thread $p$ ad ogni step, la scelta di terminare il processo di parallelizzazione può considerare i seguenti criteri pratici:
+  * **Tempo** in *strong scaling*: se $T(p)$ non migliora di almeno $\sim$ 5-10%, usare il $p/2$, che dà circa lo stesso tempo, è la scelta migliore.
+  * **Speedup** in *strong scaling*: se $\Delta{S}=S(p) - S(p/2)$ scende sotto $\sim$ 10–20% si ha poco valore ad aumentare p.
+  * **Efficienza**: sopra il 70-80% i thread vengono sufficientemente usati; se al di sotto, significa saturare le risorse e ulteriori thread non portano a benefici lineari.
+  * **Throughput**: finché continua a crescere e rimane sopra il 70-90% del throughput ideale, l’algoritmo scala sufficientemente bene; al di sotto, l'overhead diviene evidente e conviene fermarsi.
 
-#### Core Fisici vs. virtuali
+### Core Fisici vs. virtuali
 
-I **core fisici** sono unità di calcolo indipendenti, ciascuno dei quali può esporre 2 (o più) **core logici** (e.g. thread virtuali/HT/SMT); pertanto, questi ultimi condividono risorse hardware con il core fisico cui appartengono (pipeline, cache, ALU, unità di esecuzione).
+I **core** sono unità di calcolo indipendenti, ciascuno dei quali può esporre di 2 (o più) **core logici**, o *thread*, i quali, pertanto, condividono risorse hardware (pipeline, cache, ALU, unità di esecuzione).
 
 Poiché i core logici non aumentano la potenza di calcolo, l'esito del loro utilizzo dipende dal workload:
   * Se è *latency-bound* o con tanti stall per cache miss > i thread logici possono aiutare a tenere occupata l’unità di calcolo, con aumento delle prestazioni fino al 20–30%.
@@ -156,17 +156,11 @@ Poiché i core logici non aumentano la potenza di calcolo, l'esito del loro util
 
 Lo scaling su thread logici può produrre risultati ingannevoli, per cui in genere conviene utilizzare solo i core fisici. Ciò non significa che non vadano usati, ma in tal caso i dati vanno interpretati adeguatamente.
 
+#### OpenMP
+
 Su OpenMP si può garantire la suddivisione dei thread su core differenti impostando le seguenti variabili d'ambiente:
 ```
 OMP_PLACES=cores
 OMP_PROC_BIND=TRUE
 ```
 Qualora le richieste superino il massimo numero di core fisici disponibili, OpenMP mapperà i thread anche sui core virtuali.
-
-### Quando fermarsi
-
-Criteri pratici per fermarsi:
-  * Marginal speedup: $\Delta{S}=S(p) - S(p/2)$, considerando di raddoppiare $p$ ad ogni step, scende sotto ~10–20% → poco valore ad aumentare p.
-  * Efficienza: Un’efficienza sopra il 70% significa che l'utilizzo delle risorse è sufficientemente buono ed utile scalare su più thread o nodi; al di sotto, significa saturare le risorse e ulteriori thread non portano a benefici lineari.
-  * Tempo: se $T(p)$ non migliora ($>~5%$) raddoppiando $p$, usa il $p$ più basso che dà lo stesso tempo.
-  * Throughput: sopra 70-90% l’algoritmo scala sufficientemente bene. Al di sotto, l'overhead diviene evidente e conviene fermarsi.
