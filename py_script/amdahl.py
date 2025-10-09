@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 import numpy as np
 import sys
+import os
 
 
 # csv_filename           relative path to the .cvs file to analyze.
@@ -87,6 +88,7 @@ def plotStrongScaling(csv_filename = "../data/kip_openMP_strongScaling.csv",
         
         filename = f"amdahl_estimate_{image_dim}_{kernel_dim}.png".replace("x", "x")
         plt.savefig(filename, dpi=150)
+        print(f"\nImage saved at {os.path.realpath(filename)}")
         plt.show()
         plt.close()
 
@@ -166,6 +168,7 @@ def plotStrongScaling(csv_filename = "../data/kip_openMP_strongScaling.csv",
         
         filename = f"amdahl_evaluation_{image_dim}_{kernel_dim}.png".replace("x", "x")
         plt.savefig(filename, dpi=150)
+        print(f"\nImage saved at {os.path.realpath(filename)}")
         plt.show()
         plt.close()
         
@@ -266,6 +269,7 @@ def plotStrongScaling(csv_filename = "../data/kip_openMP_strongScaling.csv",
         
         filename = f"strong_scaling_{image_dim}_{kernel_dim}.png".replace("x", "x")
         plt.savefig(filename, dpi=150)
+        print(f"\nImage saved at {os.path.realpath(filename)}")
         plt.show()
         plt.close()
 

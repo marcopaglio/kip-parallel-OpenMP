@@ -8,7 +8,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC" AND USE_ASAN)
     add_compile_options(/fsanitize=address /Zi)
 endif()
 
-# Base path to VTune SDK (env var o -D in cmake)
+# VTune SDK
 if (NOT ITT_BASE_PATH)
     if(DEFINED ENV{ITT_BASE_PATH})
         set(ITT_BASE_PATH $ENV{ITT_BASE_PATH})
@@ -73,6 +73,25 @@ if(OPENMP_CXX_FOUND)
     message(STATUS "OpenMP for C++ found with CXX_VERSION=${OpenMP_CXX_VERSION}")
     target_link_libraries(kip_openMP_lib PUBLIC OpenMP::OpenMP_CXX)
 endif()
+
+# Python
+set(PY_SCRIPT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/py_script")
+set(PY_AMDHAL_SCRIPT "amdahl.py")
+set(PY_GUSTAFSON_SCRIPT "gustafson.py")
+
+set(PY_SCRIPT_DEF
+        PY_AMDHAL_SCRIPT
+        PY_GUSTAFSON_SCRIPT
+)
+# Copy Python script in build folder
+foreach (SCRIPT_DEF ${PY_SCRIPT_DEF})
+    configure_file(${PY_SCRIPT_PATH}/${${SCRIPT_DEF}} ${CMAKE_BINARY_DIR}/${${SCRIPT_DEF}} COPYONLY)
+    add_compile_definitions(${SCRIPT_DEF}="${${SCRIPT_DEF}}")
+endforeach ()
+
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+get_filename_component(PYTHON_EXE "${Python3_EXECUTABLE}" NAME_WE)
+add_compile_definitions(PYTHON_EXE="${PYTHON_EXE}")
 
 add_compile_definitions(PROJECT_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 add_compile_definitions(CMAKE_BINARY_DIR="${CMAKE_BINARY_DIR}")

@@ -30,6 +30,13 @@ int main() {
     constexpr unsigned int numReps = 3;
     const std::string cvsName = "kip_openMP_strongScaling.csv";
 
+    const std::string python = PYTHON_EXE;
+    const std::string script = PY_AMDHAL_SCRIPT;
+    constexpr unsigned int phys_cores = 10;
+    constexpr float min_relative_time = 0.05;
+    constexpr float min_marginal_speedup = 0.2;
+    constexpr float min_efficiency = 0.7;
+
     try {
         // setup timer
         std::unique_ptr<Timer> timer;
@@ -101,6 +108,16 @@ int main() {
         }
         csvFile.close();
         std::cout << "Data saved at " << CMAKE_BINARY_DIR << "/" << cvsName << std::endl;
+
+        std::cout << "Using data to draw Amdhal's graphics (with Python)." << std::endl;
+        const std::string command = python + " " +
+                                        script + " " +
+                                            cvsName + " " +
+                                            std::to_string(phys_cores) + " " +
+                                            std::to_string(min_relative_time) + " " +
+                                            std::to_string(min_marginal_speedup) + " " +
+                                            std::to_string(min_efficiency);
+        system(command.c_str());
 
     } catch (const std::exception& ex) {
         std::cerr << ex.what() << std::endl;

@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import sys
+import os
 
 
 # csv_filename              relative path to the .cvs file to analyze.
@@ -72,6 +73,7 @@ def plotWeakScaling(csv_filename = "../data/kip_openMP_weakScaling.csv", phys_co
         
         filename = f"gustafson_evaluation_{unit_of_work}_{kernel_dim}.png".replace("x", "x")
         plt.savefig(filename, dpi=150)
+        print(f"\nImage saved at {os.path.realpath(filename)}")
         plt.show()
         plt.close()
         
@@ -206,6 +208,7 @@ def plotWeakScaling(csv_filename = "../data/kip_openMP_weakScaling.csv", phys_co
         
         filename = f"weak_scaling_{unit_of_work}_{kernel_dim}.png".replace("x", "x")
         plt.savefig(filename, dpi=150)
+        print(f"\nImage saved at {os.path.realpath(filename)}")
         plt.show()
         plt.close()
         
