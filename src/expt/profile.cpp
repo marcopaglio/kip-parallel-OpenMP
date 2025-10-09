@@ -1,3 +1,4 @@
+#include <ittnotify.h>
 #include <iostream>
 #include <sstream>
 #include <thread>
@@ -38,7 +39,9 @@ int main() {
             " created." << std::endl;
 
         // transform
+        __itt_resume();
         const auto outputImage = ImageProcessing::convolution(*extendedImage, *kernel);
+        __itt_pause();
 
         // save
         fullPathStream << PROJECT_SOURCE_DIR << "/imgs/output/" << imageName <<

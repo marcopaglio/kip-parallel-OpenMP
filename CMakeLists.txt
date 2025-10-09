@@ -8,6 +8,17 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC" AND USE_ASAN)
     add_compile_options(/fsanitize=address /Zi)
 endif()
 
+# Base path to VTune SDK (env var o -D in cmake)
+if (NOT ITT_BASE_PATH)
+    if(DEFINED ENV{ITT_BASE_PATH})
+        set(ITT_BASE_PATH $ENV{ITT_BASE_PATH})
+    else()
+        message(FATAL_ERROR "Path to VTune SDK is not specified:\nDefine ITT_BASE_PATH as environment variable or pass it to cmake via -D option")
+    endif ()
+endif()
+set(ITT_INCLUDE_DIR "${ITT_BASE_PATH}/sdk/include")
+set(ITT_LIBRARY_DIR "${ITT_BASE_PATH}/sdk/lib64")
+
 include_directories(
         ${PROJECT_SOURCE_DIR}/include
         ${PROJECT_SOURCE_DIR}/src
@@ -43,7 +54,9 @@ add_executable(kip_openMP_main src/expt/main.cpp)
 target_link_libraries(kip_openMP_main kip_openMP_lib kip_openMP_timer)
 
 add_executable(kip_openMP_profile src/expt/profile.cpp)
-target_link_libraries(kip_openMP_profile kip_openMP_lib)
+target_include_directories(kip_openMP_profile PRIVATE ${ITT_INCLUDE_DIR})
+target_link_directories(kip_openMP_profile PRIVATE ${ITT_LIBRARY_DIR})
+target_link_libraries(kip_openMP_profile kip_openMP_lib libittnotify)
 
 add_executable(kip_openMP_strong_scaling src/expt/strong_scaling.cpp)
 target_link_libraries(kip_openMP_strong_scaling kip_openMP_lib kip_openMP_timer)
