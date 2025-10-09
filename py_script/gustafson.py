@@ -10,7 +10,7 @@ import sys
 #                           in order to consider it as a good time (bad values
 #                           are printed in red).
 #
-def plotWeakScaling(csv_filename = "../data/kip_openMP_weakScaling.csv", phys_cores = 8, 
+def plotWeakScaling(csv_filename = "../data/kip_openMP_weakScaling.csv", phys_cores = 10,
                     min_efficiency = 0.7, max_relative_time = 1.3):
     min_relative_throughput = min_efficiency
     

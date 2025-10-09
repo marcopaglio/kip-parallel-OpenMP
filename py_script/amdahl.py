@@ -16,8 +16,8 @@ import sys
 #                        as a good value (bad values are printed in red).
 #
 def plotStrongScaling(csv_filename = "../data/kip_openMP_strongScaling.csv", 
-                      phys_cores = 8, min_relative_time = 0.05,
-                      min_marginal_speedup = 0.2, min_efficiency = 0.5):
+                      phys_cores = 10, min_relative_time = 0.05,
+                      min_marginal_speedup = 0.2, min_efficiency = 0.7):
     df = pd.read_csv(csv_filename)
     
     # Group same-size-images-and-kernels and calculate means
@@ -228,9 +228,9 @@ def plotStrongScaling(csv_filename = "../data/kip_openMP_strongScaling.csv",
             ax2.annotate(f"{y:.2f}", (x, y), xytext=(-10, 5), textcoords="offset points",
                 ha="center", va="bottom", fontsize=8, color=color)
         
-        ax2.plot(p_range, lin_fit_speedup, "-.", color=ax2_color, alpha=0.6, 
+        ax2.plot(p_range, lin_fit_speedup, "-.", color=ax2_color, alpha=0.4, 
                  label="theoretical speedup")
-        ax2.plot(p_range, phys_lin_fit_speedup, ":", color=ax2_color, alpha=0.6, 
+        ax2.plot(p_range, phys_lin_fit_speedup, ":", color=ax2_color, alpha=0.4, 
                  label="theoretical speedup (only physical core)")
         
         ax2.set_ylabel("SpeedUp", color=ax2_color)
