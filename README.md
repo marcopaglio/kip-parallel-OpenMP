@@ -23,6 +23,7 @@ Parallelizzare un programma sequenziale non significa solo “aggiungere thread�
   
   5. **Ripetere** tuning > scaling > profiling finché non si raggiunge un compromesso accettabile.
 
+---
 
 ### Strong Scaling
 
@@ -98,6 +99,8 @@ Il valore così calcolato di $f$ è più robusto perchè utilizza tutti i punti 
   * Se $f$ decresce dopo ottimizzazioni (meno sync, migliore bilanciamento, migliore locality) > si sta recuperando margine reale.
   * Se $f$ è basso ma lo speedup si appiattisce > possibile problema di memory bandwidth.
 
+---
+
 ### Analisi dei dati
 
 I dati ottenuti dagli scaling servono a:
@@ -138,6 +141,8 @@ Se il numero di thread $p$ viene raddoppiato ad ogni step, la scelta di terminar
   * **Efficienza**: sopra il 70-80% i thread vengono sufficientemente usati; se al di sotto, significa saturare le risorse e ulteriori thread non portano a benefici lineari.
   * **Throughput**: finché continua a crescere e rimane sopra il 70-90% del throughput ideale, l’algoritmo scala sufficientemente bene; al di sotto, l'overhead diviene evidente e conviene fermarsi.
 
+---
+
 ### Core Fisici vs. virtuali
 
 I **core** sono unità di calcolo indipendenti, ciascuno dei quali può esporre di 2 (o più) **core logici**, o *thread*, i quali, pertanto, condividono risorse hardware (pipeline, cache, ALU, unità di esecuzione). Poiché i core logici non aumentano la potenza di calcolo, l'esito del loro utilizzo dipende dal workload:
@@ -148,9 +153,16 @@ Lo scaling su core logici può produrre risultati ingannevoli, per cui in genere
 
 #### OpenMP
 
-Su OpenMP si può garantire la suddivisione dei thread su core differenti impostando le seguenti variabili d'ambiente prima di chiamare qualsiasi costrutto di OpenMP:
-```
-OMP_PLACES=cores
-OMP_PROC_BIND=TRUE
+> :warning: **Warning**: Gli esperimenti dimostrano che forzare l'uso dei core fisici peggiora le prestazioni.
+
+Su OpenMP si può garantire la suddivisione dei thread su core differenti impostando le variabili d'ambiente `OMP_PLACES=cores`e ` OMP_PROC_BIND=TRUE` prima di chiamare qualsiasi costrutto di OpenMP. Per esempio su C++:
+```c++
+#ifdef _WIN32
+    _putenv_s("OMP_PROC_BIND", "TRUE");
+    _putenv_s("OMP_PLACES",    "cores");
+#elif __unix__
+    setenv("OMP_PROC_BIND", "TRUE", 1);
+    setenv("OMP_PLACES",   "cores", 1);
+#endif
 ```
 Qualora le richieste superino il massimo numero di core fisici disponibili, OpenMP mapperà i thread anche su core logici.
