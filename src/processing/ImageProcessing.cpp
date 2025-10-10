@@ -21,10 +21,10 @@ std::unique_ptr<Image> ImageProcessing::convolution(const Image &image, const Ke
 
     std::vector pixels(outputHeight, std::vector<Pixel>(outputWidth));
 
-    // collapse(2) schedule(guided)     > prestazioni simili poiché collapse(2) rimuove la località spaziale
+// #pragma omp parallel collapse(2) schedule(guided)     > prestazioni simili poiché collapse(2) rimuove la località spaziale
 #pragma omp parallel for schedule(dynamic) default(none) \
-    shared(pixels, originalData, outputHeight, outputWidth) \
-    firstprivate(order, kernelWeights)
+    shared(pixels, originalData, outputHeight) \
+    firstprivate(outputWidth, order, kernelWeights)
     /**
      * Shared vs Firstprivate
      * - Variabili piccole e super usate nei calcoli → provare firstprivate può dare un micro-vantaggio.
@@ -33,9 +33,11 @@ std::unique_ptr<Image> ImageProcessing::convolution(const Image &image, const Ke
      * A tal proposito:
      * - pixels: scritto una volta per thread e alla fine → shared perfetto
      * - originalData: read-only, ma molto grande per cui non vale l'overhead della copia → shared
-     * - outputHeight, outputWidth: read-only, ma una volta per thread → shared
-     * - order: read-only, ma diverse volte → firstprivate
-     * - kernelWeights: come order, ma più overhead per la copia → firstprivate TODO: shared?
+     * - outputHeight: read-only, ma una volta per thread → shared
+     * - outputWidth: read-only, ma SENZA COLLAPSE diverse volte per thread → firstprivate
+     *                           ma CON COLLAPSE una volta per thread → shared
+     * - order: read-only, ma tante volte → firstprivate
+     * - kernelWeights: come order, ma più overhead per la copia → firstprivate (sperimentalmente conviene a shared)
      *
      */
     for (unsigned int y = 0; y < outputHeight; y++) {
