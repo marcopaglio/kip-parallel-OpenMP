@@ -116,9 +116,10 @@ int main() {
         csvFile.close();
         std::cout << "Data saved at " << CMAKE_BINARY_DIR << "/" << cvsName << std::endl;
 
-        std::cout << "Using data to draw Gustafson's graphics (with Python)." << std::endl;
+        std::cout << "Drawing Gustafson's graphics (using Python)." << std::endl;
         const std::string command = python + " " +
                                         script + " " +
+                                            // args
                                             cvsName + " " +
                                             std::to_string(phys_cores) + " " +
                                             std::to_string(min_efficiency) + " " +
