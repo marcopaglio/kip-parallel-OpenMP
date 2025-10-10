@@ -20,6 +20,23 @@ std::unique_ptr<Image> ImageProcessing::convolution(const Image &image, const Ke
     const unsigned int outputWidth = image.getWidth() - (order - 1);
 
     std::vector pixels(outputHeight, std::vector<Pixel>(outputWidth));
+
+#pragma omp parallel for default(none) \
+    shared(pixels, originalData, outputHeight, outputWidth) \
+    firstprivate(order, kernelWeights)
+    /**
+     * Shared vs Firstprivate
+     * - Variabili piccole e super usate nei calcoli → provare firstprivate può dare un micro-vantaggio.
+     * - Variabili più grandi o usate meno intensivamente → shared è preferibile, perché evita costi di copia.
+     *
+     * A tal proposito:
+     * - pixels: scritto una volta per thread e alla fine → shared perfetto
+     * - originalData: read-only, ma molto grande per cui non vale l'overhead della copia → shared
+     * - outputHeight, outputWidth: read-only, ma una volta per thread → shared
+     * - order: read-only, ma diverse volte → firstprivate
+     * - kernelWeights: come order, ma più overhead per la copia → firstprivate TODO: shared?
+     *
+     */
     for (unsigned int y = 0; y < outputHeight; y++) {
         for (unsigned int x = 0; x < outputWidth; x++) {
             float channelRed = 0;
