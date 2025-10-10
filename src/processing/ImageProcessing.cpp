@@ -21,7 +21,8 @@ std::unique_ptr<Image> ImageProcessing::convolution(const Image &image, const Ke
 
     std::vector pixels(outputHeight, std::vector<Pixel>(outputWidth));
 
-#pragma omp parallel for default(none) \
+    // collapse(2) schedule(guided)     > prestazioni simili poiché collapse(2) rimuove la località spaziale
+#pragma omp parallel for schedule(dynamic) default(none) \
     shared(pixels, originalData, outputHeight, outputWidth) \
     firstprivate(order, kernelWeights)
     /**
