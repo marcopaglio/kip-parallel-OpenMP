@@ -28,7 +28,7 @@ int main() {
     constexpr unsigned int numImageQuality = 3;
     constexpr unsigned int order = 7; // 7, 13, 19, 25
     constexpr unsigned int numReps = 3;
-    const std::string cvsName = "kip_openMP_strongScaling.csv";
+    const std::string cvsNameRadix = "kip_openMP_strongScaling";
 
     const std::string python = PYTHON_EXE;
     const std::string script = PY_AMDHAL_SCRIPT;
@@ -46,6 +46,7 @@ int main() {
             timer = std::make_unique<SteadyTimer>();
 
         // setup csv
+        std::string cvsName = cvsNameRadix + "_" + std::to_string(imageQuality) + "K_" + std::to_string(order) + ".csv";
         std::ofstream csvFile(cvsName);
         csvFile << "ImageName,ImageDimension,KernelName,KernelDimension,TimePerRep_s,NumThreads,SpeedUp,Efficiency" << "\n";
 
