@@ -177,7 +177,7 @@ def plotWeakScaling(csv_filename = "../data/kip_openMP_weakScaling.csv", phys_co
             subgroup["NumThreads"],
             subgroup["Throughput_Mpix_s"],
             c="palegoldenrod",
-            s= 100 + 60 * subgroup["TimePerRep_s"].apply(lambda s: s),
+            s= (150 + 500 * subgroup["TimePerRep_s"] / subgroup[subgroup["NumThreads"] == 1]["TimePerRep_s"].item()).apply(lambda s: s),
             label="time"
         )
         
