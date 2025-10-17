@@ -12,8 +12,9 @@ Parallelizzare un programma sequenziale non significa solo “aggiungere thread�
        
   2. **Inserire parallelismo incrementale** degli hotspot:
        * Riconoscere sezioni parallele
+       * Riutilizzare i thread per più operazioni
+       * Rimuovere le sincronizzazioni non necessarie
        * Privatizzare le variabili
-       * Scegliere scheduling
        
   3. **Analisi della scalabilità teorica** fino a saturazione delle risorse:
        1. **Legge di Amdahl**: valutare il limite teorico dato dalla frazione sequenziale, mediante [*strong scaling*](#strong-scaling).
