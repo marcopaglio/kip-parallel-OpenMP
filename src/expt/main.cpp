@@ -1,6 +1,9 @@
 #include <iostream>
 #include <sstream>
 #include <fstream>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 #include <thread>
 
 #include "timer/HighResolutionTimer.h"
@@ -31,8 +34,18 @@ int main() {
     constexpr unsigned int maxImageQuality = 7;
     constexpr unsigned int numImageQuality = 3;
     const std::string cvsName = "kip_parallel_openMP.csv";
+    int numThreads = 16;
 
     try {
+        // setup num threads
+#ifdef _OPENMP
+        if (int max_threads = omp_get_max_threads(); numThreads > max_threads) numThreads = max_threads;
+        omp_set_num_threads(numThreads);
+#else
+        numThreads = 1;
+#endif
+        std::cout << "Using " << numThreads << " thread(s)." << std::endl << std::endl;
+
         // setup timer
         std::unique_ptr<Timer> timer;
         if constexpr (std::chrono::high_resolution_clock::is_steady)

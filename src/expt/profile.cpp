@@ -9,12 +9,28 @@
 #include "processing/ImageProcessing.h"
 #include "kernel/KernelFactory.h"
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 
 int main() {
     constexpr unsigned int imageQuality = 6;
     constexpr unsigned int order = 19;
+    int numThreads = 16;
 
     try {
+        __itt_pause();
+
+        // setup num threads
+#ifdef _OPENMP
+        if (int max_threads = omp_get_max_threads(); numThreads > max_threads) numThreads = max_threads;
+        omp_set_num_threads(numThreads);
+#else
+        numThreads = 1;
+#endif
+        std::cout << "Using " << numThreads << " thread(s)." << std::endl << std::endl;
+
         // setup image reader
         STBImageReader imageReader{};
         std::stringstream fullPathStream;
