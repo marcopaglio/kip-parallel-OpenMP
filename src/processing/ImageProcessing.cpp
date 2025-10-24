@@ -1,5 +1,9 @@
 #include "ImageProcessing.h"
 
+// #ifdef _OPENMP
+// #include <omp.h>
+// #endif
+
 #define MIN_VALUE 0
 #define MAX_VALUE 255
 
@@ -25,6 +29,7 @@ std::unique_ptr<Image> ImageProcessing::convolution(const Image &image, const Ke
 #pragma omp parallel for schedule(dynamic) default(none) \
     shared(pixels, originalData, outputHeight) \
     firstprivate(outputWidth, order, kernelWeights)
+//{
     /**
      * Shared vs Firstprivate
      * - Variabili piccole e super usate nei calcoli → provare firstprivate può dare un micro-vantaggio.
@@ -40,6 +45,21 @@ std::unique_ptr<Image> ImageProcessing::convolution(const Image &image, const Ke
      * - kernelWeights: come order, ma più overhead per la copia → firstprivate (sperimentalmente conviene a shared)
      *
      */
+// manually work division is a little better than static scheduler, but worse than dynamic one
+//     unsigned int lowerBound;
+//     unsigned int upperBound;
+// #ifdef _OPENMP
+//     int thread_id = omp_get_thread_num();
+//     int nthreads = omp_get_num_threads();
+//
+//     lowerBound = outputHeight / nthreads * thread_id;
+//     upperBound = thread_id == nthreads - 1 ? outputHeight : outputHeight / nthreads * (thread_id + 1);
+//
+//     printf("Thread n.%d has lower=%d and upper=%d\n", thread_id, lowerBound, upperBound);
+// #else
+//     lowerBound = 0;
+//     upperBound = outputHeight;
+// #endif
     for (unsigned int y = 0; y < outputHeight; y++) {
         for (unsigned int x = 0; x < outputWidth; x++) {
             float channelRed = 0;
@@ -60,6 +80,7 @@ std::unique_ptr<Image> ImageProcessing::convolution(const Image &image, const Ke
                 getChannelAsUint8(channelGreen), getChannelAsUint8(channelBlue));
         }
     }
+//} // end omp parallel
 
     return std::make_unique<Image>(outputWidth, outputHeight, pixels);
 }
