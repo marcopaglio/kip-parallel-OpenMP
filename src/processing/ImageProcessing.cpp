@@ -45,7 +45,7 @@ std::unique_ptr<Image> ImageProcessing::convolution(const Image &image, const Ke
      * - kernelWeights: come order, ma più overhead per la copia → firstprivate (sperimentalmente conviene a shared)
      *
      */
-// manually work division is a little better than static scheduler, but worse than dynamic one
+// manually work division (in horizontal stripes) is a little better than static scheduler, but worse than dynamic one
 //     unsigned int lowerBound;
 //     unsigned int upperBound;
 // #ifdef _OPENMP
