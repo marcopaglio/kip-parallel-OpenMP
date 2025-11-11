@@ -20,7 +20,7 @@ set(ITT_INCLUDE_DIR "${ITT_BASE_PATH}/sdk/include")
 set(ITT_LIBRARY_DIR "${ITT_BASE_PATH}/sdk/lib64")
 
 include_directories(
-        ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/../include
         ${PROJECT_SOURCE_DIR}/src
 )
 
