@@ -91,7 +91,8 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 get_filename_component(PYTHON_EXE "${Python3_EXECUTABLE}" NAME_WE)
 add_compile_definitions(PYTHON_EXE="${PYTHON_EXE}")
 
-add_compile_definitions(PROJECT_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+add_compile_definitions(IMAGES_INPUT_DIRPATH="${PROJECT_SOURCE_DIR}/../images/input/")
+add_compile_definitions(IMAGES_OUTPUT_DIRPATH="${PROJECT_SOURCE_DIR}/../images/output/")
 add_compile_definitions(CMAKE_BINARY_DIR="${CMAKE_BINARY_DIR}")
 
 enable_testing()

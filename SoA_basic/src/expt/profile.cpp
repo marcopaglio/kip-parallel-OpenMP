@@ -38,7 +38,7 @@ int main() {
         const std::string imageName = std::to_string(imageQuality) + "K-1";
 
         // load img
-        fullPathStream << PROJECT_SOURCE_DIR << "/imgs/input/" << imageName << ".jpg";
+        fullPathStream << IMAGES_INPUT_DIRPATH << imageName << ".jpg";
         const auto img = imageReader.loadRGBImage(fullPathStream.str());
         std::cout << "Image " << imageName << " (" << img->getWidth() << "x" << img->getHeight() <<
             ") loaded from: " << fullPathStream.str() << std::endl;
@@ -60,8 +60,7 @@ int main() {
         __itt_pause();
 
         // save
-        fullPathStream << PROJECT_SOURCE_DIR << "/imgs/output/" << imageName <<
-            "_" << kernel->getName() << kernel->getOrder() << "_profile.jpg";
+        fullPathStream << IMAGES_OUTPUT_DIRPATH << imageName << "_" << kernel->getName() << kernel->getOrder() << ".jpg";
         imageReader.saveJPGImage(*outputImage, fullPathStream.str());
         std::cout << "Image " << outputImage->getWidth() << "x" << outputImage->getHeight() <<
             " saved at: " << fullPathStream.str() << std::endl << std::endl;

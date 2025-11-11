@@ -67,7 +67,7 @@ int main() {
                 const std::string imageName = std::to_string(imageQuality) + "K-" + std::to_string(imageNum);
 
                 // load img
-                fullPathStream << PROJECT_SOURCE_DIR << "/imgs/input/" << imageName << ".jpg";
+                fullPathStream << IMAGES_INPUT_DIRPATH << imageName << ".jpg";
                 const auto img = workload::loadExpandedRGBImage(
                     fullPathStream.str(), numThreads);
                 std::cout << "Image " << imageName << " (" << img->getWidth() << "x" << img->getHeight() <<
@@ -91,8 +91,9 @@ int main() {
                 const std::chrono::duration<double> wall_clock_time_end = timer->now();
                 const std::chrono::duration<double> wall_clock_time_duration = wall_clock_time_end - wall_clock_time_start;
                 const auto timePerRep = wall_clock_time_duration.count() / numReps;
-                std::cout << "Image processed " << numReps << " times in " << wall_clock_time_duration.count() << " seconds [Wall Clock]" <<
-                    " with an average of " << timePerRep << " seconds [Wall Clock] per repetition." << std::endl;
+                std::cout << "Image processed " << numReps << " times in " << wall_clock_time_duration.count() <<
+                    " seconds [Wall Clock] with an average of " << timePerRep <<
+                    " seconds [Wall Clock] per repetition." << std::endl;
 
                 if (numThreads == 1) {
                     sequentialTimes[imageNum - 1] = timePerRep;
