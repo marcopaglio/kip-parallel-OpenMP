@@ -75,7 +75,7 @@ if(OPENMP_CXX_FOUND)
 endif()
 
 # Python
-set(PY_SCRIPT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/py_script")
+set(PY_SCRIPT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../py_script")
 set(PY_AMDHAL_SCRIPT "amdahl.py")
 set(PY_GUSTAFSON_SCRIPT "gustafson.py")
 
