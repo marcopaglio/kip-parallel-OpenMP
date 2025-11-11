@@ -31,7 +31,7 @@ TEST_F(STBImageReaderTest, testLoadRGBImageWhenImageExists) {
                                 106, 1, 118, 64, 217};
 
     std::stringstream inputFilePathStream;
-    inputFilePathStream << PROJECT_SOURCE_DIR << "/tests/imgs/input/testImage.jpg";
+    inputFilePathStream << TEST_IMAGES_INPUT_DIRPATH << "testImage.jpg";
     const std::string inputFilePath = inputFilePathStream.str();
 
     const auto img = imageReader->loadRGBImage(inputFilePath);
@@ -68,7 +68,7 @@ TEST_F(STBImageReaderTest, testSaveJPGImageWhenPathExists) {
     const Image testImage(width, height, someReds, someGreens, someBlues);
 
     std::stringstream outputFilePathStream;
-    outputFilePathStream << PROJECT_SOURCE_DIR << "/tests/imgs/output/testImage.jpg";
+    outputFilePathStream << TEST_IMAGES_OUTPUT_DIRPATH << "testImage.jpg";
     const std::string outputFilePath = outputFilePathStream.str();
 
     remove(outputFilePath.c_str());
