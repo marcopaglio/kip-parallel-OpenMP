@@ -20,13 +20,11 @@ set(ITT_INCLUDE_DIR "${ITT_BASE_PATH}/sdk/include")
 set(ITT_LIBRARY_DIR "${ITT_BASE_PATH}/sdk/lib64")
 
 include_directories(
-        ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/../include
         ${PROJECT_SOURCE_DIR}/src
 )
 
 add_library(kip_openMP_lib
-        src/image/Pixel.cpp
-        src/image/Pixel.h
         src/image/Image.cpp
         src/image/Image.h
         src/kernel/Kernel.cpp
@@ -75,7 +73,7 @@ if(OPENMP_CXX_FOUND)
 endif()
 
 # Python
-set(PY_SCRIPT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/py_script")
+set(PY_SCRIPT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../py_script")
 set(PY_AMDHAL_SCRIPT "amdahl.py")
 set(PY_GUSTAFSON_SCRIPT "gustafson.py")
 
@@ -93,7 +91,8 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 get_filename_component(PYTHON_EXE "${Python3_EXECUTABLE}" NAME_WE)
 add_compile_definitions(PYTHON_EXE="${PYTHON_EXE}")
 
-add_compile_definitions(PROJECT_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+add_compile_definitions(IMAGES_INPUT_DIRPATH="${PROJECT_SOURCE_DIR}/../images/input/")
+add_compile_definitions(IMAGES_OUTPUT_DIRPATH="${PROJECT_SOURCE_DIR}/../images/output/")
 add_compile_definitions(CMAKE_BINARY_DIR="${CMAKE_BINARY_DIR}")
 
 enable_testing()
