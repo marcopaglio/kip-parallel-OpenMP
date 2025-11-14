@@ -26,6 +26,30 @@ std::unique_ptr<Image> ImageProcessing::convolution(const Image &image, const Ke
     std::vector<uint8_t> greens(outputWidth * outputHeight);
     std::vector<uint8_t> blues(outputWidth * outputHeight);
 
+    // #pragma omp parallel schedule(static)     > prestazioni leggermente peggiori a dynamic
+    // #pragma omp parallel schedule(guided)     > prestazioni simili a dynamic
+    // try con blockSize differenti:
+    //      unsigned int blockSize = outputHeight / (omp_get_num_threads() * min_chuck) con min_chunk ) 1, 2, 4, 8
+    // mostrano risultati peggiori rispetto al valore di default di ciascun scheduler.
+#pragma omp parallel for schedule(dynamic) default(none) \
+shared(reds, greens, blues, originalReds, originalGreens, originalBlues, outputHeight) \
+firstprivate(width, outputWidth, order, kernelWeights)
+    /**
+     * Shared vs Firstprivate
+     * - Variabili piccole e super usate nei calcoli → provare firstprivate può dare un micro-vantaggio.
+     * - Variabili più grandi o usate meno intensivamente → shared è preferibile, perché evita costi di copia.
+     *
+     * A tal proposito:
+     * - reds, greens, blues: scritto una volta per thread e alla fine → shared perfetto
+     * - originalReds, originalGreens, originalBlues: read-only, ma molto grande per cui non vale l'overhead della copia → shared
+     * - outputHeight: read-only, ma una volta per thread → shared
+     * - outputWidth: read-only, ma diverse volte per thread → firstprivate
+     * - width, order: read-only, ma tante volte → firstprivate
+     * - kernelWeights: come order, ma più overhead per la copia → firstprivate o shared
+     *                                                              sperimentalmente si ha che con 7 e 19 le prestazioni sono leggermente migliori con shared
+     *                                                              mentre con 13 e 25 sono leggermente migliori con firstprivate
+     *                                                              TODO: è una questione di padding che può essere aggiunto direttamente sulla copia di kernelWeights?
+     */
     for (unsigned int y = 0; y < outputHeight; y++) {
         for (unsigned int x = 0; x < outputWidth; x++) {
             float channelRed = 0;
