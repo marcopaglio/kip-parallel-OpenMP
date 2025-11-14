@@ -31,6 +31,7 @@ std::unique_ptr<Image> ImageProcessing::convolution(const Image &image, const Ke
     // try con blockSize differenti:
     //      unsigned int blockSize = outputHeight / (omp_get_num_threads() * min_chuck) con min_chunk ) 1, 2, 4, 8
     // mostrano risultati peggiori rispetto al valore di default di ciascun scheduler.
+    // #pragma omp parallel for collapse(2) schedule(guided) > migliora le prestazioni solo con kernel 25
 #pragma omp parallel for schedule(dynamic) default(none) \
 shared(reds, greens, blues, originalReds, originalGreens, originalBlues, outputHeight) \
 firstprivate(width, outputWidth, order, kernelWeights)
