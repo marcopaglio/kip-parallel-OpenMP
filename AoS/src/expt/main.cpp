@@ -33,7 +33,7 @@ int main() {
     constexpr unsigned int minImageQuality = 4;
     constexpr unsigned int maxImageQuality = 7;
     constexpr unsigned int numImageQuality = 3;
-    const std::string cvsName = "kip_parallel_openMP.csv";
+    const std::string cvsName = "kip_parallel_openMP_AoS.csv";
     int numThreads = 16;
 
     try {
@@ -126,6 +126,7 @@ int main() {
 
                     // idle time
                     if (imageQuality != maxImageQuality ||
+                        imageNum != numImageQuality ||
                         order != KernelInfos::selectedOrders[KernelInfos::numSelectedOrders - 1]) {
                         unsigned int idleTime = KernelInfos::numSelectedTypes * (imageQuality + order / 2) / 2;
                         std::cout << "Take a pause of " << idleTime << " seconds... ";

@@ -29,7 +29,7 @@ int main() {
     constexpr unsigned int numImageQuality = 3;
     constexpr unsigned int order = 7; // 7, 13, 19, 25
     constexpr unsigned int numReps = 3;
-    const std::string cvsNameRadix = "kip_openMP_weakScaling";
+    const std::string cvsNameRadix = "kip_openMP_AoS_weakScaling";
 
     const std::string python = PYTHON_EXE;
     const std::string script = PY_GUSTAFSON_SCRIPT;
