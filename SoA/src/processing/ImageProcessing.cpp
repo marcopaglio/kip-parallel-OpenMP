@@ -101,6 +101,7 @@ firstprivate(width, outputWidth, order, kernelWeights)
             blues[y * outputWidth + x] = getChannelAsUint8(channelBlue);
         }
     }
+// } // end omp parallel
 
     return std::make_unique<Image>(outputWidth, outputHeight, reds, greens, blues);
 }
@@ -205,7 +206,6 @@ std::unique_ptr<Image> ImageProcessing::extendEdge(const Image &image, const uns
             blues[pos3] = originalBlues[idx3];
         }
     }
-// } // end omp parallel
 
     return std::make_unique<Image>(extendedWidth, extendedHeight, reds, greens, blues);
 }
