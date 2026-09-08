@@ -30,6 +30,8 @@ std::unique_ptr<Image> ImageProcessing::convolution(const Image &image, const Ke
     std::vector<uint8_t> greens(outputWidth * outputHeight);
     std::vector<uint8_t> blues(outputWidth * outputHeight);
 
+    constexpr unsigned int TILE_X = 1024;
+
     // #pragma omp parallel schedule(static)     > prestazioni leggermente peggiori a dynamic
     // #pragma omp parallel schedule(guided)     > prestazioni simili a dynamic
     // try con blockSize differenti:
@@ -37,7 +39,7 @@ std::unique_ptr<Image> ImageProcessing::convolution(const Image &image, const Ke
     // mostrano risultati peggiori rispetto al valore di default di ciascun scheduler.
     // #pragma omp parallel for collapse(2) schedule(guided) > migliora le prestazioni solo con kernel 25
 #pragma omp parallel for schedule(dynamic) default(none) \
-shared(reds, greens, blues, originalReds, originalGreens, originalBlues, outputHeight) \
+shared(reds, greens, blues, originalReds, originalGreens, originalBlues, outputHeight, TILE_X) \
 firstprivate(width, outputWidth, order, kernelWeights)
 // {
     /**
@@ -77,6 +79,7 @@ firstprivate(width, outputWidth, order, kernelWeights)
 //     upperBound = outputHeight;
 // #endif
 //     for (unsigned int y = lowerBound; y < upperBound; y++) {
+    /*
     for (unsigned int y = 0; y < outputHeight; y++) {
         for (unsigned int x = 0; x < outputWidth; x++) {
             float channelRed = 0;
@@ -101,6 +104,57 @@ firstprivate(width, outputWidth, order, kernelWeights)
             blues[y * outputWidth + x] = getChannelAsUint8(channelBlue);
         }
     }
+    */
+    for (unsigned int y = 0; y < outputHeight; y++) {
+        float channelReds[TILE_X];
+        float channelGreens[TILE_X];
+        float channelBlues[TILE_X];
+
+        for (unsigned int xBegin = 0; xBegin < outputWidth; xBegin += TILE_X) {
+            const unsigned int tileLength = std::min(TILE_X, outputWidth - xBegin);
+
+            // 1. Azzera canali RGB del tile
+            for (unsigned int t = 0; t < tileLength; t++) {
+                channelReds[t] = 0.0f;
+                channelGreens[t] = 0.0f;
+                channelBlues[t] = 0.0f;
+            }
+
+            // 2. Applica convoluzione al tile
+            for (unsigned int j = 0; j < order; j++) {
+                const unsigned int posBase = (y + j) * width + xBegin;
+                const unsigned int kwBase = j * order;
+
+                for (unsigned int i = 0; i < order; i++) {
+                    const unsigned int pos = posBase + i;
+                    const float kernelWeight = kernelWeights[kwBase + i];
+
+                    for (unsigned int  t = 0; t < tileLength; t++) {
+                        const unsigned int posTile = pos + t;
+
+                        channelReds[t] += static_cast<float>(originalReds[posTile]) * kernelWeight;
+                        channelGreens[t] += static_cast<float>(originalGreens[posTile]) * kernelWeight;
+                        channelBlues[t] += static_cast<float>(originalBlues[posTile]) * kernelWeight;
+                    }
+                }
+            }
+
+            // 3. Copia i canali RGB del tile
+            const unsigned int outputBase = y * outputWidth + xBegin;
+
+#pragma omp simd
+            for (unsigned int t = 0; t < tileLength; t++) {
+                const unsigned int outTile = outputBase + t;
+
+                reds[outTile] = getChannelAsUint8(channelReds[t]);
+                greens[outTile] = getChannelAsUint8(channelGreens[t]);
+                blues[outTile] = getChannelAsUint8(channelBlues[t]);
+            }
+        }
+    }
+
+
+
 // } // end omp parallel
 
     return std::make_unique<Image>(outputWidth, outputHeight, reds, greens, blues);
