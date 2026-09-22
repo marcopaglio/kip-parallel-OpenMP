@@ -1,7 +1,7 @@
 #ifndef IMAGE_H
 #define IMAGE_H
 #include <vector>
-
+#include <cstdint>
 
 /**
  * Represents an image composed of pixel data in a two-dimensional structure.
