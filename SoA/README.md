@@ -19,11 +19,10 @@ for (unsigned int y = 0; y < outputHeight; ++y) {
 }
 ```
 
-L'ipotesi iniziale era che `schedule(static)` fosse la scelta più adatta. Dal punto di vista algoritmico, infatti, ogni iterazione di `y` esegue essenzialmente lo stesso lavoro: percorre `outputWidth` pixel e per ciascun pixel esegue una convoluzione di `order × order` elementi. `static` avrebbe quindi dovuto fornire un buon bilanciamento con un overhead inferiore a `dynamic` e `guided`.
+L'ipotesi iniziale era che `schedule(static)` fosse la scelta più adatta. Dal punto di vista algoritmico, infatti, ogni iterazione di `y` esegue essenzialmente lo stesso lavoro: percorre `outputWidth` pixel e per ciascun pixel esegue una convoluzione di `order × order` elementi. `static` avrebbe quindi dovuto fornire un buon bilanciamento con un overhead inferiore a `dynamic` e `guided`. Le misurazioni hanno però mostrato qualcosa di diverso:
 
-Le misure hanno però mostrato qualcosa di diverso. Già nei primi esperimenti, si è osservato che **`dynamic` e `guided` erano più veloci di `static`**, con un vantaggio di circa il 10%; questo risultato consiglia che l'*uniformità del numero di operazioni non si traduce necessariamente in un tempo di esecuzione perfettamente uniforme fra i thread*. 
-
-Ulteriore prova a supporto di questa impressione è stata ottenuta dal confronto fra **`static,1` e `static`**, i quali **hanno fornito prestazioni pressoché identiche**. Il fatto che `static,1` non migliori sensibilmente rispetto allo `static` standard è interessante perché i due distribuiscono le righe in maniera molto diversa: il primo in modo ciclico, il secondo normalmente per blocchi contigui. Questo rende meno convincente l'ipotesi che il vantaggio di `dynamic` dipenda principalmente dalla particolare posizione delle righe assegnate ai thread. Il risultato punta maggiormente verso la capacità di `dynamic` di assorbire piccole differenze nei tempi effettivi dei thread.
+- Già nei primi esperimenti, si è osservato che **`dynamic` e `guided` erano più veloci di `static`**, con un vantaggio di circa il 10%; questo risultato consiglia che l'*uniformità del numero di operazioni non si traduce necessariamente in un tempo di esecuzione perfettamente uniforme fra i thread*. 
+- Ulteriore prova a supporto di questa impressione è stata ottenuta dal confronto fra **`static,1` e `static`**, i quali **hanno fornito prestazioni pressoché identiche**. Il fatto che `static,1` non migliori sensibilmente rispetto allo `static` standard è interessante perché i due distribuiscono le righe in maniera molto diversa: il primo in modo ciclico, il secondo normalmente per blocchi contigui. Questo rende meno convincente l'ipotesi che il vantaggio di `dynamic` dipenda principalmente dalla particolare posizione delle righe assegnate ai thread. Il risultato punta maggiormente verso la capacità di `dynamic` di assorbire piccole differenze nei tempi effettivi dei thread.
 
 Infine, si è provato anche a controllare manualmente la dimensione dei chunk, usando valori derivati da `outputHeight / (omp_get_num_threads() * min_chunk)` con `min_chunk` pari a 1, 2, 4 e 8. In questo caso **le dimensioni di blocco impostate esplicitamente hanno dato risultati peggiori rispetto alla dimensione scelta di default dai rispettivi scheduler**. Di conseguenza, la configurazione che si è consolidata come migliore è rimasta:
 
@@ -46,9 +45,9 @@ L'idea generale seguita è stata distinguere tra variabili grandi o condivise na
 - Lo stesso ragionamento, ma per motivi diversi, vale per `originalReds`, `originalGreens`, `originalBlues`. Questi vettori sono utilizzati esclusivamente in lettura e sono molto grandi rispetto alle altre variabili della regione parallela. `shared` è quindi la scelta più sensata: non esiste alcun rischio di data race dovuto alle letture concorrenti e una copia per thread avrebbe un costo potenzialmente molto elevato in memoria e inizializzazione.
 - `outputHeight` è stato mantenuto `shared`. È un valore scalare read-only e viene utilizzato principalmente come limite dello spazio di iterazione esterno. Dal punto di vista correttezza potrebbe essere anche `firstprivate`, ma essendo poco utilizzato all'interno del kernel vero e proprio non c'è una motivazione concreta per crearne una copia privata per thread.
 - Per `width`, `outputWidth` e `order`è stato invece scelto `firstprivate`. La motivazione è che si tratta di scalari molto piccoli, quindi il costo di duplicazione è trascurabile; inoltre vengono utilizzati frequentemente nella regione parallela. 
-- Il caso più ambiguo è stato `kernelWeights`: di fatto, non è uno scalare ma si tratta di un contenitore di $order^2$ coefficienti. Poiché read-only, si potrebbe pensare che `shared` sia preferibile per `kernelWeights`, in modo da evitarsi anche il costo di costruzione e copia del vettore per ogni thread. Tuttavia i risultati sperimentali mostrano piccole variazioni dipendenti dalla dimensione del kernel: la conclusione più corretta è che non vi sia un vincitore assoluto, ma di continuare a tenerla in considerazione per i futuri esperimenti. Di fatto, tali differenze sembrano riconducibili più a effetti microarchitetturali che a una differenza fondamentale nel modello OpenMP. Per il momento, si è optato per mantenerla privata per ogni thread, seguendo l'idea di privatizzare quanto più possibile.
+- Il caso più ambiguo è stato `kernelWeights`: di fatto, non è uno scalare ma si tratta di un contenitore di $order^2$ coefficienti. Poiché read-only, si potrebbe pensare che `shared` sia preferibile per `kernelWeights`, in modo da evitarsi anche il costo di costruzione e copia del vettore per ogni thread. Tuttavia i risultati sperimentali mostrano piccole variazioni dipendenti dalla dimensione del kernel: la conclusione più corretta è che non vi sia un vincitore assoluto, ma di continuare a tenerla in considerazione per i futuri esperimenti. Di fatto, tali differenze sembrano riconducibili più a effetti microarchitetturali che a una differenza fondamentale nel modello OpenMP. In conclusione, per il momento, si è optato per mantenerla privata per ogni thread seguendo l'idea di privatizzare quanto più possibile.
 
-Complessivamente, queste prime due modifiche hanno determinato degli ottimi risultati rispetto alla versione sequenziale del problema, per cui si identifica con *parallelizzazione #0* la versione del programma come delineata finora. I relativi risultati sulle performance sono riportati in [Experimental Results](#experimental-results).
+Complessivamente, queste prime due modifiche hanno determinato degli ottimi risultati rispetto alla versione sequenziale del problema, per cui si identifica con *Parallel#0* la versione del programma come delineata finora. I relativi risultati sulle performance sono riportati in [Experimental Results](#experimental-results).
 
 #### Introduzione di `collapse`
 
@@ -68,7 +67,7 @@ for (unsigned int j = 0; j < order; ++j) {
 }
 ```
 
-Poiché questi cicli accumulano i valori di `channelRed`, `channelGreen` e `channelBlue`, si prestano particolarmente bene per l'applicazione del pattern di *riduzione*. Affinché potesse essere applicato senza dover generare ulteriori thread mediante un’altra direttiva `for`, oltre a quella già applicata al ciclo `y` — approccio che, sperimentalmente, ha mostrato una drastica riduzione delle prestazioni — è stato considerato l’utilizzo della direttiva `simd`. A differenza della precedente, questa direttiva istruisce il compilatore OpenMP a vettorizzare il ciclo successivo senza ricorrere al worksharing.
+Poiché questi cicli accumulano i valori di `channelRed`, `channelGreen` e `channelBlue`, si prestano particolarmente bene per l'applicazione del *pattern di riduzione*. Affinché potesse essere applicato senza dover generare ulteriori thread mediante un’altra direttiva `for` (oltre a quella già applicata al ciclo `y` — approccio che, sperimentalmente, ha mostrato una drastica riduzione delle prestazioni), è stato considerato l’utilizzo della direttiva `simd`, in modo da vettorizzare il ciclo interno senza ricorrere al worksharing.
 Le modalità testate sono state principalmente due:
 
 1. Tramite l'utilizzo combinato di `collapse`:
@@ -97,13 +96,11 @@ for (unsigned int j = 0; j < order; ++j) {
 }
 ```
 
-**Questa forma ha ottenuto miglioramenti** veramente consistenti, **di oltre 2x per i kernel più grossi**. A tal proposito, si è voluto etichettare tale versione parallela come *paralellizzazione #1*, cioè la migliore di questa prima parte di esperimenti, i cui risultati sono riportati nell'analoga sezione dei risultati sperimentali. 
-
-Un'altra piccola ottimizzazione che si può notare è quella di aver portato fuori dal ciclo `i` due calcoli invarianti di `posBase` e `kwBase` riducendo l'aritmetica degli indici nel ciclo più interno.
+**Questa forma ha ottenuto miglioramenti** veramente consistenti, **di oltre 2x per i kernel più grossi**. A tal proposito, si è voluto etichettare tale versione parallela come *Parallel#1*, cioè la migliore di questa prima parte di esperimenti, i cui risultati sono riportati nell'omonima sezione dei risultati sperimentali. Questa versione si distingue inoltre per un'altra piccola ottimizzazione: i calcoli invarianti di `posBase` e `kwBase` vengono eseguiti fuori dal ciclo `i` in modo da ridurre l'aritmetica degli indici.
 
 #### Divisione manuale del lavoro tra thread
 
-Il passo successivo è stato quello di provare ad eliminare completamente la worksharing construct `omp for`, mantenendo la sola regione `parallel`, e calcolando manualmente per ogni thread un intervallo di righe.
+Il passo successivo è stato quello di provare ad eliminare completamente il worksharing construct `omp for`, mantenendo la sola regione `parallel`, e calcolando manualmente per ogni thread un intervallo di righe.
 
 La prima versione è stata:
 
@@ -118,7 +115,7 @@ upperBound =
 
 L'obiettivo era verificare se eliminando l'intervento dello scheduler OpenMP fosse possibile ottenere prestazioni migliori. Il risultato è stato però **identico o minimamente peggiore**.
 
-È stato quindi individuato un problema nella prima suddivisione: tutto il resto della divisione veniva assegnato all'ultimo thread, il che avrebbe potuto rendere la suddivisione manuale vana dal momento che tutti i thread avrebbero dovuto attendere la fine del maggior carico di lavoro dell'ultimo thread. Si è dunque proposto una modalità *fair*, in cui le righe residue vengono distribuite una per volta ai primi thread:
+È stato quindi individuato un problema in questa prima versione: tutto il resto della divisione viene assegnato all'ultimo thread; ciò potrebbe rendere la suddivisione manuale vana dal momento che tutti i thread dovrebbero attendere la fine del maggior carico di lavoro dell'ultimo thread. Si è dunque proposto una modalità *fair*, in cui le righe residue vengono distribuite una per volta ai primi thread:
 
 ```cpp
 const unsigned int base = outputHeight / nthreads;
@@ -133,7 +130,7 @@ upperBound =
     (thread_id < remainder ? 1 : 0);
 ```
 
-Questa modifica **ha prodotto piccoli miglioramenti in tutti gli esperimenti rispetto alla prima divisione manuale**, confermando che il precedente squilibrio fosse reale. Tuttavia, anche dopo aver reso la partizione quasi perfettamente uniforme, **nel complesso la suddivisione manuale non ha portato miglioramenti**. Questo è probabilmente uno dei risultati più significativi ottenuti finora. Dimostra che il vantaggio del dynamic scheduling non deriva semplicemente da un'implementazione inefficiente dello static scheduling di OpenMP.
+Questa modifica **ha prodotto piccoli miglioramenti in tutti gli esperimenti rispetto alla prima divisione manuale**, confermando che il precedente squilibrio fosse reale. Tuttavia, anche dopo aver reso la partizione quasi perfettamente uniforme, **nel complesso la suddivisione manuale non ha portato miglioramenti**. Questo risultato dimostra che il vantaggio del dynamic scheduling non deriva semplicemente da un'implementazione inefficiente dello static scheduling di OpenMP.
 
 ### Restructuring
 
@@ -195,10 +192,9 @@ dove `t` identifica i pixel all'interno del tile. Per ogni tile vengono creati t
 1) Fornisce al compilatore un ciclo interno estremamente semplice e regolare, con accessi contigui sia all'input sia agli accumulatori.
 2) Elimina la lunga catena di dipendenza associata a un singolo accumulatore scalare, rendendo disponibile molto più instruction-level parallelism.
 
-Il risultato è stato nettamente superiore a quello ottenuto con tutte le precedenti modifiche OpenMP. Già con `TILE_X = 64` e senza alcuna direttiva SIMD sul ciclo computazionale, il guadagno rispetto a *parallelizzazione #1* è stato dell'ordine di circa 1.5×–2.3×, a seconda della dimensione del kernel e dell'immagine. In particolare, il guadagno tende a essere più elevato coi kernel più piccoli e a ridursi con quelli più grandi, seppure rimanendo molto significativo.
+Il risultato è stato nettamente superiore a quello ottenuto con tutte le precedenti modifiche OpenMP. Già con `TILE_X = 64` e senza alcuna direttiva SIMD sul ciclo computazionale, il guadagno rispetto a *Parallel#1* è stato dell'ordine di circa $1.5–2.3\times$, a seconda della dimensione del kernel e dell'immagine. In particolare, il guadagno tende a essere più elevato coi kernel più piccoli e a ridursi con quelli più grandi, seppure rimanendo molto significativo.
 
 Sulla macchina utilizzata, il miglior valore individuato sperimentalmente per l'iperparametro `TILE_X` è stato di `1024`, sebbene il vantaggio rispetto a `64` sia molto piccolo.
-
 
 #### Applicazione delle direttive SIMD sulla versione `TILE_X`
 
@@ -217,7 +213,7 @@ Una volta ottenuta questa nuova struttura, sono state provate diverse configuraz
     }
 ```
 
-Tale versione ottenuta è risultata la migliore dal punto di vista delle prestazione ed è stata pertanto definita come *parallelizzazione #2*, di cui ne sono state misurate le performance mostrate nella relativa sezione.
+Tale versione ottenuta è risultata la migliore dal punto di vista delle prestazione ed è stata pertanto marcata come *MainParallel*, e i risultati sperimentali sono stati aggiunti nell'apposita sezione.
 
 #### Parallelizzazione dei tile
 
@@ -229,7 +225,11 @@ Sperimentalmente, tuttavia, **la parallelizzazione esplicita dei tile non ha pro
 
 ### Experimental Results
 
-TODO
+#### Parallel#0
+
+#### Parallel#1
+
+#### Main Parallel
 
 ### Profiling Results
 
