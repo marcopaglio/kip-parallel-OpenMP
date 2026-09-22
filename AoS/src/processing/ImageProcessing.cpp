@@ -66,7 +66,7 @@ std::unique_ptr<Image> ImageProcessing::convolution(const Image &image, const Ke
             float channelGreen = 0;
             float channelBlue = 0;
 
-// #pragma omp simd reduction(+:channelRed, channelGreen, channelBlue)  > Prestazioni identiche, probabilmente in Release viene già vettorizzato
+// #pragma omp simd reduction(+:channelRed, channelGreen, channelBlue)  > Prestazioni identiche causa "warning: loop not vectorized"
             for (unsigned int j = 0; j < order; j++) {
                 for (unsigned int i = 0; i < order; i++) {
                     Pixel originalPixel = originalData[y + j][x + i];
