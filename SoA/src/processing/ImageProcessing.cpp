@@ -32,79 +32,9 @@ std::unique_ptr<Image> ImageProcessing::convolution(const Image &image, const Ke
 
     constexpr unsigned int TILE_X = 1024;
 
-    // #pragma omp parallel schedule(static)     > prestazioni leggermente peggiori a dynamic
-    // #pragma omp parallel schedule(guided)     > prestazioni simili a dynamic
-    // try con blockSize differenti:
-    //      unsigned int blockSize = outputHeight / (omp_get_num_threads() * min_chuck) con min_chunk ) 1, 2, 4, 8
-    // mostrano risultati peggiori rispetto al valore di default di ciascun scheduler.
-    // #pragma omp parallel for collapse(2) schedule(guided) > migliora le prestazioni solo con kernel 25
 #pragma omp parallel for schedule(dynamic) default(none) \
 shared(reds, greens, blues, originalReds, originalGreens, originalBlues, outputHeight, TILE_X) \
 firstprivate(width, outputWidth, order, kernelWeights)
-// {
-    /**
-     * Shared vs Firstprivate
-     * - Variabili piccole e super usate nei calcoli → provare firstprivate può dare un micro-vantaggio.
-     * - Variabili più grandi o usate meno intensivamente → shared è preferibile, perché evita costi di copia.
-     *
-     * A tal proposito:
-     * - reds, greens, blues: scritto una volta per thread e alla fine → shared perfetto
-     * - originalReds, originalGreens, originalBlues: read-only, ma molto grande per cui non vale l'overhead della copia → shared
-     * - outputHeight: read-only, ma una volta per thread → shared
-     * - outputWidth: read-only, ma diverse volte per thread → firstprivate
-     * - width, order: read-only, ma tante volte → firstprivate
-     * - kernelWeights: come order, ma più overhead per la copia → firstprivate o shared
-     *                                                              sperimentalmente si ha che con 7 e 19 le prestazioni sono leggermente migliori con shared
-     *                                                              mentre con 13 e 25 sono leggermente migliori con firstprivate
-     *                                                              TODO: è una questione di padding che può essere aggiunto direttamente sulla copia di kernelWeights?
-     */
-// manually work division (in horizontal stripes) is a little better than static scheduler, but worse than dynamic one
-//     unsigned int lowerBound;
-//     unsigned int upperBound;
-// #ifdef _OPENMP
-//     int thread_id = omp_get_thread_num();
-//     int nthreads = omp_get_num_threads();
-//
-//     const int thread_id = omp_get_thread_num();
-//     const int nthreads = omp_get_num_threads();
-//     const unsigned int base = outputHeight / nthreads;
-//     const unsigned int remainder = outputHeight % nthreads;
-
-//     lowerBound = thread_id * base + std::min<unsigned int>(thread_id, remainder);
-//     upperBound = lowerBound + base + (thread_id < remainder ? 1 : 0);
-//
-//     // printf("Thread n.%d has lower=%d and upper=%d\n", thread_id, lowerBound, upperBound);
-// #else
-//     lowerBound = 0;
-//     upperBound = outputHeight;
-// #endif
-//     for (unsigned int y = lowerBound; y < upperBound; y++) {
-    /*
-    for (unsigned int y = 0; y < outputHeight; y++) {
-        for (unsigned int x = 0; x < outputWidth; x++) {
-            float channelRed = 0;
-            float channelGreen = 0;
-            float channelBlue = 0;
-
-//#pragma omp simd collapse(2) reduction(+:channelRed, channelGreen, channelBlue)  // > prestazioni pessime che peggiorano all'aumentare delle dimensioni.
-            for (unsigned int j = 0; j < order; j++) {
-                const unsigned int posBase = (y + j) * width + x;
-                const unsigned int kwBase = j * order;
-#pragma omp simd reduction(+:channelRed, channelGreen, channelBlue)
-                for (unsigned int i = 0; i < order; i++) {
-                    const unsigned int pos = posBase + i;
-                    const float kernelWeight = kernelWeights[kwBase + i];
-                    channelRed += static_cast<float>(originalReds[pos]) * kernelWeight;
-                    channelGreen += static_cast<float>(originalGreens[pos]) * kernelWeight;
-                    channelBlue += static_cast<float>(originalBlues[pos]) * kernelWeight;
-                }
-            }
-            reds[y * outputWidth + x] = getChannelAsUint8(channelRed);
-            greens[y * outputWidth + x] = getChannelAsUint8(channelGreen);
-            blues[y * outputWidth + x] = getChannelAsUint8(channelBlue);
-        }
-    }
-    */
     for (unsigned int y = 0; y < outputHeight; y++) {
         float channelReds[TILE_X];
         float channelGreens[TILE_X];
@@ -152,10 +82,6 @@ firstprivate(width, outputWidth, order, kernelWeights)
             }
         }
     }
-
-
-
-// } // end omp parallel
 
     return std::make_unique<Image>(outputWidth, outputHeight, reds, greens, blues);
 }

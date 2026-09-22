@@ -25,52 +25,21 @@ std::unique_ptr<Image> ImageProcessing::convolution(const Image &image, const Ke
 
     std::vector pixels(outputHeight, std::vector<Pixel>(outputWidth));
 
-// #pragma omp parallel collapse(2) schedule(guided)     > prestazioni simili poiché collapse(2) rimuove la località spaziale
 #pragma omp parallel for schedule(dynamic) default(none) \
     shared(pixels, originalData, outputHeight) \
     firstprivate(outputWidth, order, kernelWeights)
-//{
-    /**
-     * Shared vs Firstprivate
-     * - Variabili piccole e super usate nei calcoli → provare firstprivate può dare un micro-vantaggio.
-     * - Variabili più grandi o usate meno intensivamente → shared è preferibile, perché evita costi di copia.
-     *
-     * A tal proposito:
-     * - pixels: scritto una volta per thread e alla fine → shared perfetto
-     * - originalData: read-only, ma molto grande per cui non vale l'overhead della copia → shared
-     * - outputHeight: read-only, ma una volta per thread → shared
-     * - outputWidth: read-only, ma SENZA COLLAPSE diverse volte per thread → firstprivate
-     *                           ma CON COLLAPSE una volta per thread → shared
-     * - order: read-only, ma tante volte → firstprivate
-     * - kernelWeights: come order, ma più overhead per la copia → firstprivate (sperimentalmente conviene a shared)
-     *
-     */
-// manually work division (in horizontal stripes) is a little better than static scheduler, but worse than dynamic one
-//     unsigned int lowerBound;
-//     unsigned int upperBound;
-// #ifdef _OPENMP
-//     int thread_id = omp_get_thread_num();
-//     int nthreads = omp_get_num_threads();
-//
-//     lowerBound = outputHeight / nthreads * thread_id;
-//     upperBound = thread_id == nthreads - 1 ? outputHeight : outputHeight / nthreads * (thread_id + 1);
-//
-//     printf("Thread n.%d has lower=%d and upper=%d\n", thread_id, lowerBound, upperBound);
-// #else
-//     lowerBound = 0;
-//     upperBound = outputHeight;
-// #endif
     for (unsigned int y = 0; y < outputHeight; y++) {
         for (unsigned int x = 0; x < outputWidth; x++) {
             float channelRed = 0;
             float channelGreen = 0;
             float channelBlue = 0;
 
-// #pragma omp simd reduction(+:channelRed, channelGreen, channelBlue)  > Prestazioni identiche causa "warning: loop not vectorized"
             for (unsigned int j = 0; j < order; j++) {
+                const unsigned int posBase = y + j;
+                const unsigned int kwBase = j * order;
                 for (unsigned int i = 0; i < order; i++) {
-                    Pixel originalPixel = originalData[y + j][x + i];
-                    const float kernelWeight = kernelWeights[j * order + i];
+                    Pixel originalPixel = originalData[posBase][x + i];
+                    const float kernelWeight = kernelWeights[kwBase + i];
                     channelRed += static_cast<float>(originalPixel.getR()) * kernelWeight;
                     channelGreen += static_cast<float>(originalPixel.getG()) * kernelWeight;
                     channelBlue += static_cast<float>(originalPixel.getB()) * kernelWeight;
@@ -80,7 +49,6 @@ std::unique_ptr<Image> ImageProcessing::convolution(const Image &image, const Ke
                 getChannelAsUint8(channelGreen), getChannelAsUint8(channelBlue));
         }
     }
-//} // end omp parallel
 
     return std::make_unique<Image>(outputWidth, outputHeight, pixels);
 }
