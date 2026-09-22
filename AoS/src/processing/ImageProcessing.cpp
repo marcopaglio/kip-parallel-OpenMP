@@ -1,8 +1,8 @@
 #include "ImageProcessing.h"
 
-// #ifdef _OPENMP
-// #include <omp.h>
-// #endif
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 #define MIN_VALUE 0
 #define MAX_VALUE 255
@@ -25,28 +25,50 @@ std::unique_ptr<Image> ImageProcessing::convolution(const Image &image, const Ke
 
     std::vector pixels(outputHeight, std::vector<Pixel>(outputWidth));
 
-#pragma omp parallel for schedule(dynamic) default(none) \
-    shared(pixels, originalData, outputHeight) \
-    firstprivate(outputWidth, order, kernelWeights)
-    for (unsigned int y = 0; y < outputHeight; y++) {
-        for (unsigned int x = 0; x < outputWidth; x++) {
-            float channelRed = 0;
-            float channelGreen = 0;
-            float channelBlue = 0;
+    constexpr unsigned int TILE_X = 1024;
 
+#pragma omp parallel for schedule(dynamic) default(none) \
+shared(pixels, originalData, outputHeight, TILE_X) \
+firstprivate(outputWidth, order, kernelWeights)
+    for (unsigned int y = 0; y < outputHeight; y++) {
+        float channelReds[TILE_X];
+        float channelGreens[TILE_X];
+        float channelBlues[TILE_X];
+
+        for (unsigned int xBegin = 0; xBegin < outputWidth; xBegin += TILE_X) {
+            const unsigned int tileLength = std::min(TILE_X, outputWidth - xBegin);
+
+            // 1. Azzera canali RGB del tile
+            for (unsigned int t = 0; t < tileLength; t++) {
+                channelReds[t] = 0.0f;
+                channelGreens[t] = 0.0f;
+                channelBlues[t] = 0.0f;
+            }
+
+            // 2. Applica convoluzione al tile
             for (unsigned int j = 0; j < order; j++) {
-                const unsigned int posBase = y + j;
+                const unsigned int posBaseY = y + j;
                 const unsigned int kwBase = j * order;
+
                 for (unsigned int i = 0; i < order; i++) {
-                    Pixel originalPixel = originalData[posBase][x + i];
+                    const unsigned int posBaseX = xBegin + i;
                     const float kernelWeight = kernelWeights[kwBase + i];
-                    channelRed += static_cast<float>(originalPixel.getR()) * kernelWeight;
-                    channelGreen += static_cast<float>(originalPixel.getG()) * kernelWeight;
-                    channelBlue += static_cast<float>(originalPixel.getB()) * kernelWeight;
+
+                    for (unsigned int  t = 0; t < tileLength; t++) {
+                        const unsigned int posTileX = posBaseX + t;
+
+                        Pixel originalPixel = originalData[posBaseY][posTileX];
+                        channelReds[t] += static_cast<float>(originalPixel.getR()) * kernelWeight;
+                        channelGreens[t] += static_cast<float>(originalPixel.getG()) * kernelWeight;
+                        channelBlues[t] += static_cast<float>(originalPixel.getB()) * kernelWeight;
+                    }
                 }
             }
-            pixels[y][x] = Pixel(getChannelAsUint8(channelRed),
-                getChannelAsUint8(channelGreen), getChannelAsUint8(channelBlue));
+
+            // 3. Copia i canali RGB del tile
+            for (unsigned int t = 0; t < tileLength; t++)
+                pixels[y][xBegin + t] = Pixel(getChannelAsUint8(channelReds[t]),
+                    getChannelAsUint8(channelGreens[t]), getChannelAsUint8(channelBlues[t]));
         }
     }
 
