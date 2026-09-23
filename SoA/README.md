@@ -134,5 +134,3 @@ The following tables summarizes the temporal measurements of convolutions on dif
 </table>
 
 It can be seen that the times recorded for inputs of the same size are very similar, indicating that the execution times of the operations are independent of the pixel values.
-
-TODO
