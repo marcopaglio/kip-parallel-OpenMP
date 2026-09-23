@@ -1,10 +1,10 @@
 ## Kip-parallel-OpenMP - AoS
 
-This is the *Array-of-Structures* version of **kip-parallel-OpenMP**. An alternative versions can be found at the [SoA folder](../SoA "SoA version of kip-parallel-OpenMP").
+This is the *Array-of-Structures* version of **kip-parallel-OpenMP**. Alternative versions can be found at:
 
-### Implementation Differences
-
-TODO
+- [SoA folder](../SoA "SoA version of kip-parallel-OpenMP").
+- [Parallel#0 branch](https://github.com/marcopaglio/kip-sequential/tree/parallel%230/AoS "First parallelization of kip-parallel-openMP's AoS version")
+- [Parallel#1 branch](https://github.com/marcopaglio/kip-sequential/tree/parallel%231/AoS "Second parallelization of kip-parallel-openMP's AoS version")
 
 ### Parallelization iter
 
@@ -51,7 +51,7 @@ L'idea generale seguita è stata distinguere tra variabili grandi o condivise na
 - Per `outputWidth` e `order`è stato invece scelto `firstprivate`. La motivazione è che si tratta di scalari molto piccoli, quindi il costo di duplicazione è trascurabile; inoltre vengono utilizzati frequentemente nella regione parallela. 
 - Il caso più ambiguo è stato `kernelWeights`: di fatto, non è uno scalare ma si tratta di un contenitore di $order^2$ coefficienti. Poiché read-only, si potrebbe pensare che `shared` sia preferibile per `kernelWeights`, in modo da evitarsi anche il costo di costruzione e copia del vettore per ogni thread. Tuttavia i risultati sperimentali mostrano piccole variazioni dipendenti dalla dimensione del kernel: la conclusione più corretta è che non vi sia un vincitore assoluto, ma di continuare a tenerla in considerazione per i futuri esperimenti. Di fatto, tali differenze sembrano riconducibili più a effetti microarchitetturali che a una differenza fondamentale nel modello OpenMP. In conclusione, per il momento, si è optato per mantenerla privata per ogni thread seguendo l'idea di privatizzare quanto più possibile.
 
-Complessivamente, queste prime due modifiche hanno determinato degli ottimi risultati rispetto alla versione sequenziale del problema, per cui si identifica con *Parallel#0* la versione del programma come delineata finora. I relativi risultati sulle performance sono riportati in [Experimental Results](#experimental-results).
+Complessivamente, queste prime due modifiche hanno determinato degli ottimi risultati rispetto alla versione sequenziale del problema, per cui si identifica con *Parallel#0* la versione del programma come delineata finora. I relativi risultati sulle performance sono riportati in [Parallel#0's Experimental Results](https://github.com/marcopaglio/kip-parallel-OpenMP/tree/parallel%230/AoS#experimental-results "Experimental results section for the first parallelization of kip-parallel-openMP's AoS version").
 
 #### Introduzione di `collapse`
 
@@ -167,7 +167,7 @@ dove `t` identifica i pixel all'interno del tile. Per ogni tile vengono creati t
 
 Diversamente dalla controparte SoA, il risultato per AoS si è limitato ad un generico miglioramento di solo il 10% rispetto a quello ottenuto con tutte le precedenti modifiche OpenMP, i.e. *Parallel#0*. In particolare, il guadagno tende a essere più elevato coi kernel più piccoli e a ridursi con quelli più grandi, seppure rimanendo molto significativo. 
 
-Sulla macchina utilizzata, il miglior valore individuato sperimentalmente per l'iperparametro `TILE_X` è stato di `1024`. Tale versione ottenuta è risultata la migliore dal punto di vista delle prestazione ed è stata pertanto marcata come *MainParallel*, e i risultati sperimentali sono stati aggiunti nell'apposita sezione.
+Sulla macchina utilizzata, il miglior valore individuato sperimentalmente per l'iperparametro `TILE_X` è stato di `1024`. Tale versione ottenuta è risultata la migliore dal punto di vista delle prestazione ed è stata pertanto marcata come *MainParallel*, e i risultati sperimentali sono in [Experimental Results](#experimental-results).
 
 #### Applicazione delle direttive SIMD sulla versione `TILE_X`
 
@@ -183,9 +183,102 @@ Sperimentalmente, tuttavia, **la parallelizzazione esplicita dei tile non ha pro
 
 ### Experimental Results
 
-#### Parallel#0
+The following tables summarizes the temporal measurements of convolutions on different images with different kernels, measured in release mode.
 
-#### Main Parallel
+<table>
+  <thead>
+    <tr>
+      <th colspan="3" rowspan="3">Execution Time<br>(Release mode)</th>
+      <th colspan="12">Image Dimension</th>
+    </tr>
+    <tr>
+      <th colspan="3">4K</th>
+      <th colspan="3">5K</th>
+      <th colspan="3">6K</th>
+      <th colspan="3">7K</th>
+    </tr>
+    <tr>
+      <th>1</th>
+      <th>2</th>
+      <th>3</th>
+      <th>1</th>
+      <th>2</th>
+      <th>3</th>
+      <th>1</th>
+      <th>2</th>
+      <th>3</th>
+      <th>1</th>
+      <th>2</th>
+      <th>3</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td rowspan="9"><strong>Kernel Dimension</strong></td>
+      <td rowspan="4"><strong>Box Blurring</strong></td>
+      <td><strong>7</strong></td>
+      <td>0.20504</td>
+      <td>0.16468</td>
+      <td>0.16378</td>
+      <td>0.30609</td>
+      <td>0.30760</td>
+      <td>0.30952</td>
+      <td>0.53501</td>
+      <td>0.51284</td>
+      <td>0.50828</td>
+      <td>0.74517</td>
+      <td>0.75032</td>
+      <td>0.74818</td>
+    </tr>
+    <tr>
+      <td><strong>13</strong></td>
+      <td>0.49079</td>
+      <td>0.48147</td>
+      <td>0.47891</td>
+      <td>0.90793</td>
+      <td>0.90491</td>
+      <td>0.90464</td>
+      <td>1.4898</td>
+      <td>1.48822</td>
+      <td>1.48679</td>
+      <td>2.19345</td>
+      <td>2.18766</td>
+      <td>2.17106</td>
+    </tr>
+    <tr>
+      <td><strong>19</strong></td>
+      <td>1.00431</td>
+      <td>1.00307</td>
+      <td>1.00511</td>
+      <td>1.91239</td>
+      <td>1.91459</td>
+      <td>1.93517</td>
+      <td>3.08409</td>
+      <td>3.08064</td>
+      <td>3.08502</td>
+      <td>4.54001</td>
+      <td>4.52739</td>
+      <td>4.52115</td>
+    </tr>
+    <tr>
+      <td><strong>25</strong></td>
+      <td>1.73494</td>
+      <td>1.73553</td>
+      <td>1.75971</td>
+      <td>3.34289</td>
+      <td>3.29614</td>
+      <td>3.29618</td>
+      <td>5.28777</td>
+      <td>5.28481</td>
+      <td>5.28199</td>
+      <td>7.75955</td>
+      <td>7.80973</td>
+      <td>7.84652</td>
+    </tr>
+  </tbody>
+</table>
+
+It can be seen that the times recorded for inputs of the same size are very similar, indicating that the execution times of the operations are independent of the pixel values.
 
 ### Profiling Results
 
