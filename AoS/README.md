@@ -1,9 +1,8 @@
 ## Kip-parallel-OpenMP - AoS - Parallel#0 branch
 
-This branch differs from the [AoS version of the main branch](https://github.com/marcopaglio/kip-parallel-OpenMP/AoS "AoS folder of kip-parallel-OpenMP's main branch") for the implementation of `convolution` method of `ImageProcessing` class and the way it is parallelised.<br>
+This branch differs from the [AoS version of the main branch](https://github.com/marcopaglio/kip-parallel-OpenMP/AoS "AoS folder of kip-parallel-OpenMP's main branch") for the implementation of `ImageProcessing::convolution` method and the way it is parallelised.<br>
 
-In particular, questa versione parallela, denominata *Parallel#0*, è la prima ottenuta a partire da [AoS di kip-sequential](https://github.com/marcopaglio/kip-sequential/AoS "AoS folder of kip-sequential's main branch), nonché la più semplice. Di fatto, il processo di parallelizzazione qui si è limitato alle seguenti modifiche:
-In particular, this parallel version, known as *Parallel#0*, is the first directly derived from [kip-sequential’s AoS](https://github.com/marcopaglio/kip-sequential/AoS ‘AoS folder of kip-sequential’s main branch’), and is also the simplest. In fact, the parallelisation process here is limited to the following changes:
+In particular, this parallel version, named *Parallel#0*, is the first directly derived from [kip-sequential’s AoS](https://github.com/marcopaglio/kip-sequential/AoS "AoS folder of kip-sequential’s main branch"), and is also the simplest. In fact, the parallelisation process here is limited to the following changes:
 
 - Parallel region and worksharing over the outer loop `y`, i.e. along the rows of the image.
 - Selection of the `dynamic` scheduler.
@@ -26,8 +25,7 @@ for (y) {
 }
 ```
 
-In questa forma, per ogni pixel vengono inizializzati tre accumulatori scalari e successivamente aggiornati `order²` volte. La strategia si distingue from the [AoS version of the main branch] per l'introduzione del tiling orizzontale:
-In this form, three scalar accumulators are initialised for each pixel and subsequently updated `order²` times. The strategy differs from the [AoS version of the main branch](https://github.com/marcopaglio/kip-parallel-OpenMP/AoS "AoS folder of kip-parallel-OpenMP's main branch") fro the introduction of horizontal tiling, i.e:
+In this form, three scalar accumulators are initialised for each pixel and subsequently updated `order²` times. The strategy differs from the [AoS version of the main branch](https://github.com/marcopaglio/kip-parallel-OpenMP/AoS "AoS folder of kip-parallel-OpenMP's main branch") for the introduction of horizontal tiling, i.e:
 
 ```cpp
 #pragma omp parallel for schedule(dynamic) default(none) \
