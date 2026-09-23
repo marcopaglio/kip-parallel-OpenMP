@@ -1,15 +1,3 @@
-## Kip-parallel-OpenMP - AoS
+## Kip-parallel-OpenMP - AoS - Parallel#1 branch
 
-This is the *Array-of-Structures* version of **kip-parallel-OpenMP**. An alternative versions can be found at the [SoA folder](../SoA "SoA version of kip-parallel-OpenMP").
-
-### Implementation Differences
-
-TODO
-
-### Experimental Results
-
-TODO
-
-### Profiling Results
-
-TODO
+The AoS version of this branch is identical to branch the [AoS version of the Parallel#0 branch](https://github.com/marcopaglio/kip-parallel-OpenMP/tree/parallel%230/AoS "AoS folder of kip-parallel-OpenMP's Parallel#0 branch").
