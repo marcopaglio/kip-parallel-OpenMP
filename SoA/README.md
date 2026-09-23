@@ -1,6 +1,10 @@
 ## Kip-parallel-OpenMP - SoA
 
-This is the *Structure-of-Arrays* version of **kip-parallel-OpenMP**. An alternative versions can be found at the [AoS folder](../AoS "AoS version of kip-parallel-OpenMP").
+This is the *Structure-of-Arrays* version of **kip-parallel-OpenMP**. Alternative versions can be found at:
+
+- [AoS folder](../AoS "AoS version of kip-parallel-OpenMP")
+- [Parallel#0 branch](https://github.com/marcopaglio/kip-sequential/tree/parallel%230/SoA "First parallelization of kip-parallel-openMP's SoA version")
+- [Parallel#1 branch](https://github.com/marcopaglio/kip-sequential/tree/parallel%231/SoA "Second parallelization of kip-parallel-openMP's SoA version")
 
 ### Parallelization iter
 
@@ -47,7 +51,7 @@ L'idea generale seguita è stata distinguere tra variabili grandi o condivise na
 - Per `width`, `outputWidth` e `order`è stato invece scelto `firstprivate`. La motivazione è che si tratta di scalari molto piccoli, quindi il costo di duplicazione è trascurabile; inoltre vengono utilizzati frequentemente nella regione parallela. 
 - Il caso più ambiguo è stato `kernelWeights`: di fatto, non è uno scalare ma si tratta di un contenitore di $order^2$ coefficienti. Poiché read-only, si potrebbe pensare che `shared` sia preferibile per `kernelWeights`, in modo da evitarsi anche il costo di costruzione e copia del vettore per ogni thread. Tuttavia i risultati sperimentali mostrano piccole variazioni dipendenti dalla dimensione del kernel: la conclusione più corretta è che non vi sia un vincitore assoluto, ma di continuare a tenerla in considerazione per i futuri esperimenti. Di fatto, tali differenze sembrano riconducibili più a effetti microarchitetturali che a una differenza fondamentale nel modello OpenMP. In conclusione, per il momento, si è optato per mantenerla privata per ogni thread seguendo l'idea di privatizzare quanto più possibile.
 
-Complessivamente, queste prime due modifiche hanno determinato degli ottimi risultati rispetto alla versione sequenziale del problema, per cui si identifica con *Parallel#0* la versione del programma come delineata finora. I relativi risultati sulle performance sono riportati in [Experimental Results](#experimental-results).
+Complessivamente, queste prime due modifiche hanno determinato degli ottimi risultati rispetto alla versione sequenziale del problema, per cui si identifica con *Parallel#0* la versione del programma come delineata finora. I relativi risultati sulle performance sono riportati in [Parallel#0's Experimental Results](https://github.com/marcopaglio/kip-parallel-OpenMP/tree/parallel%230/SoA#experimental-results "Experimental results section for the first parallelization of kip-parallel-openMP's SoA version").
 
 #### Introduzione di `collapse`
 
@@ -96,7 +100,7 @@ for (unsigned int j = 0; j < order; ++j) {
 }
 ```
 
-**Questa forma ha ottenuto miglioramenti** veramente consistenti, **di oltre 2x per i kernel più grossi**. A tal proposito, si è voluto etichettare tale versione parallela come *Parallel#1*, cioè la migliore di questa prima parte di esperimenti, i cui risultati sono riportati nell'omonima sezione dei risultati sperimentali. Questa versione si distingue inoltre per un'altra piccola ottimizzazione: i calcoli invarianti di `posBase` e `kwBase` vengono eseguiti fuori dal ciclo `i` in modo da ridurre l'aritmetica degli indici.
+**Questa forma ha ottenuto miglioramenti** veramente consistenti, **di oltre 2x per i kernel più grossi**. A tal proposito, si è voluto etichettare tale versione parallela come *Parallel#1*, cioè la migliore di questa prima parte di esperimenti, i cui risultati sono riportati in [Parallel#1's Experimental Results](https://github.com/marcopaglio/kip-parallel-OpenMP/tree/parallel%231/SoA#experimental-results "Experimental results section for the second parallelization of kip-parallel-openMP's SoA version"). Questa versione si distingue inoltre per un'altra piccola ottimizzazione: i calcoli invarianti di `posBase` e `kwBase` vengono eseguiti fuori dal ciclo `i` in modo da ridurre l'aritmetica degli indici.
 
 #### Divisione manuale del lavoro tra thread
 
@@ -213,7 +217,7 @@ Una volta ottenuta questa nuova struttura, sono state provate diverse configuraz
     }
 ```
 
-Tale versione ottenuta è risultata la migliore dal punto di vista delle prestazione ed è stata pertanto marcata come *MainParallel*, e i risultati sperimentali sono stati aggiunti nell'apposita sezione.
+Tale versione ottenuta è risultata la migliore dal punto di vista delle prestazione ed è stata pertanto marcata come *MainParallel*, e i risultati sperimentali sono stati aggiunti in [Experimental Results](#experimental-results).
 
 #### Parallelizzazione dei tile
 
@@ -225,11 +229,102 @@ Sperimentalmente, tuttavia, **la parallelizzazione esplicita dei tile non ha pro
 
 ### Experimental Results
 
-#### Parallel#0
+The following tables summarizes the temporal measurements of convolutions on different images with different kernels, measured in release mode.
 
-#### Parallel#1
+<table>
+  <thead>
+    <tr>
+      <th colspan="3" rowspan="3">Execution Time<br>(Release mode)</th>
+      <th colspan="12">Image Dimension</th>
+    </tr>
+    <tr>
+      <th colspan="3">4K</th>
+      <th colspan="3">5K</th>
+      <th colspan="3">6K</th>
+      <th colspan="3">7K</th>
+    </tr>
+    <tr>
+      <th>1</th>
+      <th>2</th>
+      <th>3</th>
+      <th>1</th>
+      <th>2</th>
+      <th>3</th>
+      <th>1</th>
+      <th>2</th>
+      <th>3</th>
+      <th>1</th>
+      <th>2</th>
+      <th>3</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td rowspan="9"><strong>Kernel Dimension</strong></td>
+      <td rowspan="4"><strong>Box Blurring</strong></td>
+      <td><strong>7</strong></td>
+      <td>0.04842</td>
+      <td>0.03416</td>
+      <td>0.03320</td>
+      <td>0.06200</td>
+      <td>0.05832</td>
+      <td>0.05928</td>
+      <td>0.09549</td>
+      <td>0.09818</td>
+      <td>0.09659</td>
+      <td>0.13456</td>
+      <td>0.13350</td>
+      <td>0.13551</td>
+    </tr>
+    <tr>
+      <td><strong>13</strong></td>
+      <td>0.06750</td>
+      <td>0.06757</td>
+      <td>0.06898</td>
+      <td>0.12669</td>
+      <td>0.12724</td>
+      <td>0.12720</td>
+      <td>0.20207</td>
+      <td>0.20178</td>
+      <td>0.20306</td>
+      <td>0.29487</td>
+      <td>0.29504</td>
+      <td>0.29867</td>
+    </tr>
+    <tr>
+      <td><strong>19</strong></td>
+      <td>0.12546</td>
+      <td>0.12565</td>
+      <td>0.12595</td>
+      <td>0.23875</td>
+      <td>0.23455</td>
+      <td>0.23472</td>
+      <td>0.37526</td>
+      <td>0.37985</td>
+      <td>0.38246</td>
+      <td>0.54533</td>
+      <td>0.55172</td>
+      <td>0.54782</td>
+    </tr>
+    <tr>
+      <td><strong>25</strong></td>
+      <td>0.20849</td>
+      <td>0.20443</td>
+      <td>0.20543</td>
+      <td>0.38263</td>
+      <td>0.38251</td>
+      <td>0.38294</td>
+      <td>0.62168</td>
+      <td>0.62205</td>
+      <td>0.62164</td>
+      <td>0.94424</td>
+      <td>0.92882</td>
+      <td>0.94158</td>
+    </tr>
+  </tbody>
+</table>
 
-#### Main Parallel
+It can be seen that the times recorded for inputs of the same size are very similar, indicating that the execution times of the operations are independent of the pixel values.
 
 ### Profiling Results
 
