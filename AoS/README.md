@@ -14,15 +14,11 @@ The overall structure is essentially as follows:
 #pragma omp parallel for schedule(dynamic) default(none) \
 shared(pixels, originalData, outputHeight) \
 firstprivate(outputWidth, order, kernelWeights)
-for (y) {
-    for (x) {
-        for (j) {
-            for (i) {
+for (y)
+    for (x)
+        for (j)
+            for (i)
                 // accumulate channel Red/Green/Blue
-            }
-        }
-    }
-}
 ```
 
 In this form, three scalar accumulators are initialised for each pixel and subsequently updated `order²` times. The strategy differs from the [AoS version of the main branch](https://github.com/marcopaglio/kip-parallel-OpenMP/AoS "AoS folder of kip-parallel-OpenMP's main branch") for the introduction of horizontal tiling, i.e:
