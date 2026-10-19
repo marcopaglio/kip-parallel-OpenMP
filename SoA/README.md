@@ -338,23 +338,26 @@ While profiling in the sequential version is mainly used to identify programme h
 
 #### Results
 
-The *Performance Snapshot* for the OpenMP programme shows very positive overall behaviour:
+The *Performance Snapshot* for the OpenMP programme shows a positive overall behaviour:
 
 - Logical Core Utilization exceeds 80%, while Physical Core Utilization reaches 72%.
 - Microarchitecture Usage stands at 65%, with excellent Instruction Retiring rates for both Performance-cores (68%) and Efficient-cores (58%).
-- Vectorization of Packed Floating Point (FP) Operations is 99.6%, despite the fact that almost all FP operations are single-precision and the full potential for vectorisation is not being utilised.
+- Vectorization of Packed Floating Point (FP) Operations is 99.6%.
 
 A more in-depth analysis of the `convolution` function also reveals:
 
-- For *Memory Access*, there is a high number of loads (123,665,310,000 loads and 61,976,810,000 stores), accompanied by a small number of LLC Miss Counts (275,110) and a virtually non-existent Memory Bound (3.1%, i.e. the extent to which the behaviour of the memory subsystem contributes to pipeline limitations). For all these reasons, it can be concluded that the programme is not limited by main memory bandwidth.
-- Per *Microarchitecture Exploration* viene replicato il comportamento registrato nella sezione generale con una netta distinzione fra P-core ed E-core; in particolare, i primi mostrano percentuali di Back-End Bound inferiori ai secondi di 10 punti percentuali (14.6% and 26.4%), entrambi con Core Bound prevalente (i.e. Hence it may indicate the machine ran out of an OOO resources, certain execution units are overloaded or dependencies in program's data- or instruction- flow are limiting the performance). 
-- In *Threading* viene sottolineato invece lo scarso utilizzo dei core logici, che è di appena il 23%, con una media di utilizzo di soli 4 core (su 16 disponibili). La motivazione principale sembrerebbe essere dovuta ad un utilizzo eccessivo di thread (i.e. 16) per l'esecuzione del programma, dal momento che si hanno alti valori di Preemption Wait Time (i.e. the time when a thread remains inactive and excluded from execution by the OS scheduler due to thread preemption. Significant Preemption Wait Time can signal a thread oversubscription problem either because of oversubscription of application threads or a conflict with OS threads or other applications on the system.), mentre è quasi nullo il Inactive Sync Wait Time. Questo risultato si può graficamente trovare anche nel calcolo dello strong e weak scaling, per i quali si nota un netto calo delle performance nel momento in cui si passa da 4 a 8 thread, e ancora di più da 8 a 16 thread.
+- For *Memory Access*, there is a high number of loads (~123 billions) and stores (~62 billions), accompanied by a small number of LLC Miss Counts (~275000) and almost absent Memory Bound (3.1%). For all these reasons, it can be concluded that the programme is not limited by main memory bandwidth.
+- For *Microarchitecture Exploration* there is a clear distinction between P-cores and E-cores; in particular, the former show Back-End Bound percentages 10 percentage points lower than the latter (14.6% and 26.4%), with Core Bound being the predominant factor in both cases. This may indicate that the machine ran out of out-of-order (OOO) resources, that certain execution units are overloaded, or that dependencies in the programme’s data or instruction flow are limiting performance.
 
-#### Interpretazione dei risultati
+<p align="center">
+  <img src="/../assets/vtune_omp_rel_ue_1ms_soa.png" alt="Screenshot of Microarchitecture Exploration profiling summary." title="Microarchitecture Exploration summary" width="70%"/>
+</p>
 
-Per quanto emerso dalla profilazione, il problema principale è riconducibile al load imbalance che determina thread in idle, e in secondo luogo potrebbe essere ulteriormente migliorata la struttura e la logica di accesso ai dati per favorire un'accesso intuitivo alla memoria da parte del programma.
+- The *Threading* analysis hightlights the low utilisation of logical cores, which is standing at just 23%, with an average utilisation of only 4 cores (out of 16 available!). The Preemption Wait Time suggests that the main cause is the excessive use of threads, i.e. 16, for programme execution; indeed, a significant Preemption Wait Time can signal a thread oversubscription problem either because of oversubscription of application threads or a conflict with OS threads or other applications on the system. On the other hand, the Inactive Sync Wait Time is almost zero. This result can also be observed graphically in the strong and weak scaling calculations, where a marked drop in performance is evident when scaling from 4 to 8 threads, and even more so when scaling from 8 to 16 threads, as shown in the [Fig. 1](#figure-1).
 
-Di conseguenza, le azioni principali per migliorare ulteriormente il parallelismo nel programma potrebbe essere quello di:
+<p align="center">
+  <img id="figure-1" src="/../assets/soa_parallel2_strong_weak_6_19.png" alt="Strong and weak scaling curves for a 6K image and a kernel of order 19." title="Strong and weak scaling curves" width="70%"/>
+</p>
 
-- Ricontrollare le politiche di scheduling.
-- Mantenere accessi contigui, per esempio continuando a scorrere lungo la dimensione orizzontale dell'immagine, evitando accessi irregolari che rendano più difficile sfruttare cache e vettorizzazione (di cui tuttavia la struttura SoA ne ha assorbe già gran parte dei guadagni potenziali).
+As revealed by the profiling, the main problem can be attributed to load imbalance, which results in idle threads. Consequently, the main steps to further improve parallelism in the programme could be to review the scheduling policies.
+Secondly, the structure and logic of data access could be further improved to facilitate intuitive memory access by the programme, for example by ensuring contiguous accesses and avoiding irregular accesses that make it more difficult to utilise caching and vectorization; in any case, the SoA architecture has already exploited most of the potential benefits arising from these aspects.
