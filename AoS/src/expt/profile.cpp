@@ -56,7 +56,10 @@ int main() {
 
         // transform
         __itt_resume();
-        const auto outputImage = ImageProcessing::convolution(*extendedImage, *kernel);
+        std::unique_ptr<Image> outputImage;
+        for (unsigned int rep = 0; rep < numThreads; rep++) {
+            outputImage = ImageProcessing::convolution(*extendedImage, *kernel);
+        }
         __itt_pause();
 
         // save
