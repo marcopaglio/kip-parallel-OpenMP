@@ -326,6 +326,35 @@ The following tables summarizes the temporal measurements of convolutions on dif
 
 It can be seen that the times recorded for inputs of the same size are very similar, indicating that the execution times of the operations are independent of the pixel values.
 
-### Profiling Results
+### Profiling
 
-TODO
+While profiling in the sequential version is mainly used to identify programme hotspots, in the parallel version its primary aim is to identify potential improvements. In this regard, the `profile.cpp` in the OpenMP version differs from the sequential version in 3 main ways:
+
+- It utilises the maximum number of threads made available by the processors.
+- It focuses profiling solely on hotspot functions rather than on the entire programme.
+  + In this project, the by far most significant hotspot function is `convolution`.
+  + VTune allows partial profiling to be applied via the `__itt_pause` and `__itt_resume` APIs in the `ittnotify.h` library; however, as these introduce significant overhead, Intel recommends calling them at a frequency of no less than 1 Hz.
+- Execute the hotspot function multiple times (`numThreads` times) in succession so that sufficient data is generated for analysis (the parallel execution typically takes few tenths of a second).
+
+#### Results
+
+The *Performance Snapshot* for the OpenMP programme shows very positive overall behaviour:
+
+- Logical Core Utilization exceeds 80%, while Physical Core Utilization reaches 72%.
+- Microarchitecture Usage stands at 65%, with excellent Instruction Retiring rates for both Performance-cores (68%) and Efficient-cores (58%).
+- Vectorization of Packed Floating Point (FP) Operations is 99.6%, despite the fact that almost all FP operations are single-precision and the full potential for vectorisation is not being utilised.
+
+A more in-depth analysis of the `convolution` function also reveals:
+
+- For *Memory Access*, there is a high number of loads (123,665,310,000 loads and 61,976,810,000 stores), accompanied by a small number of LLC Miss Counts (275,110) and a virtually non-existent Memory Bound (3.1%, i.e. the extent to which the behaviour of the memory subsystem contributes to pipeline limitations). For all these reasons, it can be concluded that the programme is not limited by main memory bandwidth.
+- Per *Microarchitecture Exploration* viene replicato il comportamento registrato nella sezione generale con una netta distinzione fra P-core ed E-core; in particolare, i primi mostrano percentuali di Back-End Bound inferiori ai secondi di 10 punti percentuali (14.6% and 26.4%), entrambi con Core Bound prevalente (i.e. Hence it may indicate the machine ran out of an OOO resources, certain execution units are overloaded or dependencies in program's data- or instruction- flow are limiting the performance). 
+- In *Threading* viene sottolineato invece lo scarso utilizzo dei core logici, che è di appena il 23%, con una media di utilizzo di soli 4 core (su 16 disponibili). La motivazione principale sembrerebbe essere dovuta ad un utilizzo eccessivo di thread (i.e. 16) per l'esecuzione del programma, dal momento che si hanno alti valori di Preemption Wait Time (i.e. the time when a thread remains inactive and excluded from execution by the OS scheduler due to thread preemption. Significant Preemption Wait Time can signal a thread oversubscription problem either because of oversubscription of application threads or a conflict with OS threads or other applications on the system.), mentre è quasi nullo il Inactive Sync Wait Time. Questo risultato si può graficamente trovare anche nel calcolo dello strong e weak scaling, per i quali si nota un netto calo delle performance nel momento in cui si passa da 4 a 8 thread, e ancora di più da 8 a 16 thread.
+
+#### Interpretazione dei risultati
+
+Per quanto emerso dalla profilazione, il problema principale è riconducibile al load imbalance che determina thread in idle, e in secondo luogo potrebbe essere ulteriormente migliorata la struttura e la logica di accesso ai dati per favorire un'accesso intuitivo alla memoria da parte del programma.
+
+Di conseguenza, le azioni principali per migliorare ulteriormente il parallelismo nel programma potrebbe essere quello di:
+
+- Ricontrollare le politiche di scheduling.
+- Mantenere accessi contigui, per esempio continuando a scorrere lungo la dimensione orizzontale dell'immagine, evitando accessi irregolari che rendano più difficile sfruttare cache e vettorizzazione (di cui tuttavia la struttura SoA ne ha assorbe già gran parte dei guadagni potenziali).
