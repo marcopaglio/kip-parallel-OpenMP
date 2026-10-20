@@ -350,13 +350,13 @@ A more in-depth analysis of the `convolution` function also reveals:
 - For *Microarchitecture Exploration* there is a clear distinction between P-cores and E-cores; in particular, the former show Back-End Bound percentages 10 percentage points lower than the latter (14.6% and 26.4%), with Core Bound being the predominant factor in both cases. This may indicate that the machine ran out of out-of-order (OOO) resources, that certain execution units are overloaded, or that dependencies in the programme’s data or instruction flow are limiting performance.
 
 <p align="center">
-  <img src="/../assets/vtune_omp_rel_ue_1ms_soa.png" alt="Screenshot of Microarchitecture Exploration profiling summary." title="Microarchitecture Exploration summary" width="70%"/>
+  <img src="/../assets/vtune_omp_rel_ue_1ms_soa.png" alt="Screenshot of Microarchitecture Exploration profiling summary." title="Microarchitecture Exploration summary" width="40%"/>
 </p>
 
 - The *Threading* analysis hightlights the low utilisation of logical cores, which is standing at just 23%, with an average utilisation of only 4 cores (out of 16 available!). The Preemption Wait Time suggests that the main cause is the excessive use of threads, i.e. 16, for programme execution; indeed, a significant Preemption Wait Time can signal a thread oversubscription problem either because of oversubscription of application threads or a conflict with OS threads or other applications on the system. On the other hand, the Inactive Sync Wait Time is almost zero. This result can also be observed graphically in the strong and weak scaling calculations, where a marked drop in performance is evident when scaling from 4 to 8 threads, and even more so when scaling from 8 to 16 threads, as shown in the [Fig. 1](#figure-1).
 
 <p align="center">
-  <img id="figure-1" src="/../assets/soa_parallel2_strong_weak_6_19.png" alt="Strong and weak scaling curves for a 6K image and a kernel of order 19." title="Strong and weak scaling curves" width="70%"/>
+  <img id="figure-1" src="/../assets/soa_parallel2_strong_weak_6_19.png" alt="Strong and weak scaling curves for a 6K image and a kernel of order 19." title="Strong and weak scaling curves"/>
 </p>
 
 As revealed by the profiling, the main problem can be attributed to load imbalance, which results in idle threads. Consequently, the main steps to further improve parallelism in the programme could be to review the scheduling policies.
