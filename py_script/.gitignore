@@ -1,7 +1,0 @@
-# Ignore every file in this folder
-*
-# Except this one
-!.gitignore
-# And Python files and their requirements
-!*.py
-!requirements.txt
