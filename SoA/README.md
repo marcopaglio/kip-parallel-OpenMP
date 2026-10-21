@@ -332,7 +332,7 @@ While profiling in the sequential version is mainly used to identify programme h
 
 - It utilises the maximum number of threads made available by the processors.
 - It focuses profiling solely on hotspot functions rather than on the entire programme.
-  + In this project, the by far most significant hotspot function is `convolution`.
+  + In this project, the by far most significant hotspot function is `ImageProcessing::convolution`.
   + VTune allows partial profiling to be applied via the `__itt_pause` and `__itt_resume` APIs in the `ittnotify.h` library; however, as these introduce significant overhead, Intel recommends calling them at a frequency of no less than 1 Hz.
 - Execute the hotspot function multiple times (`numThreads` times) in succession so that sufficient data is generated for analysis (the parallel execution typically takes few tenths of a second).
 
@@ -340,24 +340,55 @@ While profiling in the sequential version is mainly used to identify programme h
 
 The *Performance Snapshot* for the OpenMP programme shows a positive overall behaviour:
 
-- Logical Core Utilization exceeds 80%, while Physical Core Utilization reaches 72%.
-- Microarchitecture Usage stands at 65%, with excellent Instruction Retiring rates for both Performance-cores (68%) and Efficient-cores (58%).
-- Vectorization of Packed Floating Point (FP) Operations is 99.6%.
+- **Logical Core Utilization** exceeds **80%**, while **Physical Core Utilization** reaches **72%**.
+- **Microarchitecture Usage** stands at **65%**, with excellent **Instruction Retiring rates** for both Performance-cores (**68%**) and Efficient-cores (**58%**).
+- **Vectorization** of Packed Floating Point (FP) Operations **is 99.6%**.
 
-A more in-depth analysis of the `convolution` function also reveals:
+A more in-depth analysis of the `ImageProcessing::convolution` function also reveals:
 
-- For *Memory Access*, there is a high number of loads (~123 billions) and stores (~62 billions), accompanied by a small number of LLC Miss Counts (~275000) and almost absent Memory Bound (3.1%). For all these reasons, it can be concluded that the programme is not limited by main memory bandwidth.
-- For *Microarchitecture Exploration* there is a clear distinction between P-cores and E-cores; in particular, the former show Back-End Bound percentages 10 percentage points lower than the latter (14.6% and 26.4%), with Core Bound being the predominant factor in both cases. This may indicate that the machine ran out of out-of-order (OOO) resources, that certain execution units are overloaded, or that dependencies in the programme’s data or instruction flow are limiting performance.
-
-<p align="center">
-  <img src="/../assets/vtune_omp_rel_ue_1ms_soa.png" alt="Screenshot of Microarchitecture Exploration profiling summary." title="Microarchitecture Exploration summary" width="40%"/>
-</p>
-
-- The *Threading* analysis hightlights the low utilisation of logical cores, which is standing at just 23%, with an average utilisation of only 4 cores (out of 16 available!). The Preemption Wait Time suggests that the main cause is the excessive use of threads, i.e. 16, for programme execution; indeed, a significant Preemption Wait Time can signal a thread oversubscription problem either because of oversubscription of application threads or a conflict with OS threads or other applications on the system. On the other hand, the Inactive Sync Wait Time is almost zero. This result can also be observed graphically in the strong and weak scaling calculations, where a marked drop in performance is evident when scaling from 4 to 8 threads, and even more so when scaling from 8 to 16 threads, as shown in the [Fig. 1](#figure-1).
+- For *Memory Access*, there is a high number of loads (~123 billions) and stores (~62 billions), accompanied by a **small number of LLC Miss Counts** (~275000) and **almost absent Memory Bound** (**3.1%**). For all these reasons, it can be concluded that the programme is not limited by the memory bandwidth.
+- For *Microarchitecture Exploration* there is a clear distinction between P-cores and E-cores; in particular, the former show a **Back-End Bound** lower than the latter (**14.6%** and **26.4%**), with **Core Bound** being **the predominant** factor in both cases. This may indicate that the machine ran out of out-of-order (OOO) resources, that certain execution units are overloaded, or that dependencies in the programme’s data or instruction flow are limiting performance. Furthermore, the **Load Bound at 13.2%** suggests a problem linked to memory accesses, but the **Stores Bound at 0.4%** excludes significant write problems, such as *false sharing*. Other details can be found in the [Fig. 1](#figure-1).
 
 <p align="center">
-  <img id="figure-1" src="/../assets/soa_parallel2_strong_weak_6_19.png" alt="Strong and weak scaling curves for a 6K image and a kernel of order 19." title="Strong and weak scaling curves"/>
+  <img id="figure-1" src="/../assets/vtune_omp_rel_ue_1ms_soa.png" alt="Screenshot of Microarchitecture Exploration profiling summary." title="Microarchitecture Exploration summary" width="40%"/>
 </p>
 
-As revealed by the profiling, the main problem can be attributed to load imbalance, which results in idle threads. Consequently, the main steps to further improve parallelism in the programme could be to review the scheduling policies.
-Secondly, the structure and logic of data access could be further improved to facilitate intuitive memory access by the programme, for example by ensuring contiguous accesses and avoiding irregular accesses that make it more difficult to utilise caching and vectorization; in any case, the SoA architecture has already exploited most of the potential benefits arising from these aspects.
+- The *Threading* analysis hightlights the **low utilization of logical cores**, which is standing **at just 23%**, with an average utilization of **only 4 cores** (out of 16 available!). The **Preemption Wait Time of 6.370s** suggests that the main cause is an excessive use of threads for programme execution; indeed, a significant Preemption Wait Time can signal a thread oversubscription problem either because of oversubscription of application threads or a conflict with OS threads or other applications on the system. On the other hand, the **Inactive Sync Wait Time is almost zero**. This result can also be observed graphically in the strong and weak scaling calculations, where a marked drop in performance is evident when scaling from 4 to 8 threads, and even more so when scaling from 8 to 16 threads, as shown in the [Fig. 2](#figure-2). However, switching to a higher number of threads results in a performance benefit, so it is certainly worth keeping.
+
+<p align="center">
+  <img id="figure-2" src="/../assets/soa_parallel2_strong_weak_6_19.png" alt="Strong and weak scaling curves for a 6K image and a kernel of order 19." title="Strong and weak scaling curves"/>
+</p>
+
+#### Consequences
+
+As revealed by the profiling, the main problem can be attributed to *load imbalance*, which results in idle threads. Consequently, the main steps to further improve parallelism in the programme could be to review the scheduling policies.
+
+In this regard, greater control can be achieved by adjusting the *thread affinity*. The main idea might be to use only the P-cores, with the aim of balancing thread utilization and eliminating the Back-End Bound issues associated with the E-cores. Assuming the number of P-cores is known (e.g. `p_core_number=10`), on an Intel machine this behaviour can be set via the following configuration, which must be placed before any other operation that might have initialised the OpenMP runtime:
+
+```cpp
+#ifdef _WIN32
+    _putenv_s("KMP_HW_SUBSET", "10c:intel_core,1t");
+    _putenv_s("OMP_NUM_THREADS", "10");
+    _putenv_s("OMP_PROC_BIND", "close");
+#elif __unix__
+    setenv("KMP_HW_SUBSET", "10c:intel_core,1t", 1);
+    setenv("OMP_NUM_THREADS", "10", 1);
+    setenv("OMP_PROC_BIND", "close", 1);
+#endif
+```
+
+As might be expected from the graphs in the [Fig. 2](#figure-2), this change reduces performance, since a greater number of threads (slightly) improves the total execution time.
+
+Secondly, the profiling suggests that the structure and logic of data access should be further improved to facilitate intuitive memory access by the programme, for example by ensuring contiguous accesses and avoiding irregular accesses that make it more difficult to utilize caching and vectorization.
+
+The SoA architecture has already exploited most of the potential benefits arising from these aspects. 
+A further improvement could be achieved by removing `std::vector` in `Image` class, but this change is not taken into account because it alters the main structure of the project, making it more difficult to compare with the sequential version. 
+Another startegy could be using cache-aligned data structures, but this also requires using of simpler data structures, such as:
+
+```cpp
+auto* reds = static_cast<uint8_t*>(_aligned_malloc(size, CACHE_LINE_SIZE));
+auto* greens = static_cast<uint8_t*>(_aligned_malloc(size, CACHE_LINE_SIZE));
+auto* blues = static_cast<uint8_t*>(_aligned_malloc(size, CACHE_LINE_SIZE));
+```
+
+where `CACHE_LINE_SIZE=64`, depending on your cache configurationand.
