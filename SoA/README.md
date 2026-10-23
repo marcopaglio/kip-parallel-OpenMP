@@ -192,7 +192,13 @@ for (y)
                     accumula channelRed/Green/Blue
 ```
 
-dove `t` identifica i pixel all'interno del tile. Per ogni tile vengono creati tre vettori temporanei (`channelReds`, `channelGreens`, `channelBlues`) di dimensione `TILE_X`, e un singolo coefficiente del kernel che viene applicato in sequenza a tutti i pixel del tile. Questa versione presenta tre vantaggi principali:
+dove `t` identifica i pixel all'interno del tile. Per ogni tile vengono creati tre vettori temporanei (`channelReds`, `channelGreens`, `channelBlues`) di dimensione `TILE_X`, e un singolo coefficiente del kernel che viene applicato in sequenza a tutti i pixel del tile. La differenza visuale fra il prima e dopo l'applicazione del tiling orizzontale è possibile vederla in [Fig. 1](#figure-1).
+
+<p align="center">
+  <img id="figure-1" src="/../assets/horizontal_tiling_before_and_after.png" alt="Visualization of before and after applying horizontal tiling." title="Horizontal tiling visualization" width="90%" />
+</p>
+
+Questa versione presenta tre vantaggi principali:
 
 1) Consente di applicare la strategia di *first touch* per i thread sugli accumulatori dei canali favorendo accessi ottimali alla memoria e l'utilizzo della memoria locale (che a sua volta può portare a speedup superlineari, rispetto alla versione sequenziale).
 2) La suddivisione lungo le righe fornisce al compilatore un ciclo interno estremamente semplice e regolare, con accessi contigui sia all'input sia agli accumulatori, riducendo significativamente l'eventuale problema di *False Sharing* (sebbene questa soluzione non garantisce banchi di memoria allineati alla cache, anche qualora `TILE_X` venga scelto come multiplo di tale dimensione).
@@ -349,16 +355,16 @@ The *Performance Snapshot* for the OpenMP programme shows a positive overall beh
 A more in-depth analysis of the `ImageProcessing::convolution` function also reveals:
 
 - For *Memory Access*, there is a high number of loads (~123 billions) and stores (~62 billions), accompanied by a **small number of LLC Miss Counts** (~275000) and **almost absent Memory Bound** (**3.1%**). For all these reasons, it can be concluded that the programme is not limited by the memory bandwidth.
-- For *Microarchitecture Exploration* there is a clear distinction between P-cores and E-cores; in particular, the former show a **Back-End Bound** lower than the latter (**14.6%** and **26.4%**), with **Core Bound** being **the predominant** factor in both cases. This may indicate that the machine ran out of out-of-order (OOO) resources, that certain execution units are overloaded, or that dependencies in the programme’s data or instruction flow are limiting performance. Furthermore, the **Load Bound at 13.2%** suggests a problem linked to memory accesses, but the **Stores Bound at 0.4%** excludes significant write problems, such as *false sharing*. Other details can be found in the [Fig. 1](#figure-1).
+- For *Microarchitecture Exploration* there is a clear distinction between P-cores and E-cores; in particular, the former show a **Back-End Bound** lower than the latter (**14.6%** and **26.4%**), with **Core Bound** being **the predominant** factor in both cases. This may indicate that the machine ran out of out-of-order (OOO) resources, that certain execution units are overloaded, or that dependencies in the programme’s data or instruction flow are limiting performance. Furthermore, the **Load Bound at 13.2%** suggests a problem linked to memory accesses, but the **Stores Bound at 0.4%** excludes significant write problems, such as *false sharing*. Other details can be found in the [Fig. 2](#figure-2).
 
 <p align="center">
-  <img id="figure-1" src="/../assets/vtune_omp_rel_ue_1ms_soa.png" alt="Screenshot of Microarchitecture Exploration profiling summary." title="Microarchitecture Exploration summary" width="40%"/>
+  <img id="figure-2" src="/../assets/vtune_omp_rel_ue_1ms_soa.png" alt="Screenshot of Microarchitecture Exploration profiling summary." title="Microarchitecture Exploration summary" width="40%"/>
 </p>
 
-- The *Threading* analysis hightlights the **low utilization of logical cores**, which is standing **at just 23%**, with an average utilization of **only 4 cores** (out of 16 available!). The **Preemption Wait Time of 6.370s** suggests that the main cause is an excessive use of threads for programme execution; indeed, a significant Preemption Wait Time can signal a thread oversubscription problem either because of oversubscription of application threads or a conflict with OS threads or other applications on the system. On the other hand, the **Inactive Sync Wait Time is almost zero**. This result can also be observed graphically in the strong and weak scaling calculations, where a marked drop in performance is evident when scaling from 4 to 8 threads, and even more so when scaling from 8 to 16 threads, as shown in the [Fig. 2](#figure-2). However, switching to a higher number of threads results in a performance benefit, so it is certainly worth keeping.
+- The *Threading* analysis hightlights the **low utilization of logical cores**, which is standing **at just 23%**, with an average utilization of **only 4 cores** (out of 16 available!). The **Preemption Wait Time of 6.370s** suggests that the main cause is an excessive use of threads for programme execution; indeed, a significant Preemption Wait Time can signal a thread oversubscription problem either because of oversubscription of application threads or a conflict with OS threads or other applications on the system. On the other hand, the **Inactive Sync Wait Time is almost zero**. This result can also be observed graphically in the strong and weak scaling calculations, where a marked drop in performance is evident when scaling from 4 to 8 threads, and even more so when scaling from 8 to 16 threads, as shown in the [Fig. 3](#figure-3). However, switching to a higher number of threads results in a performance benefit, so it is certainly worth keeping.
 
 <p align="center">
-  <img id="figure-2" src="/../assets/soa_parallel2_strong_weak_6_19.png" alt="Strong and weak scaling curves for a 6K image and a kernel of order 19." title="Strong and weak scaling curves"/>
+  <img id="figure-3" src="/../assets/soa_parallel2_strong_weak_6_19.png" alt="Strong and weak scaling curves for a 6K image and a kernel of order 19." title="Strong and weak scaling curves"/>
 </p>
 
 #### Consequences
