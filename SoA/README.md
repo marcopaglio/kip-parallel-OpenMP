@@ -189,12 +189,14 @@ for (y)
         for (j)
             for (i)
                 for (t)
+                    accumula channelRed/Green/Blue
 ```
 
-dove `t` identifica i pixel all'interno del tile. Per ogni tile vengono creati tre vettori temporanei (`channelReds`, `channelGreens`, `channelBlues`) di dimensione `TILE_X`, e un singolo coefficiente del kernel che viene applicato in sequenza a tutti i pixel del tile. Questa versione presenta due vantaggi principali:
+dove `t` identifica i pixel all'interno del tile. Per ogni tile vengono creati tre vettori temporanei (`channelReds`, `channelGreens`, `channelBlues`) di dimensione `TILE_X`, e un singolo coefficiente del kernel che viene applicato in sequenza a tutti i pixel del tile. Questa versione presenta tre vantaggi principali:
 
-1) Fornisce al compilatore un ciclo interno estremamente semplice e regolare, con accessi contigui sia all'input sia agli accumulatori.
-2) Elimina la lunga catena di dipendenza associata a un singolo accumulatore scalare, rendendo disponibile molto più instruction-level parallelism.
+1) Consente di applicare la strategia di *first touch* per i thread sugli accumulatori dei canali favorendo accessi ottimali alla memoria e l'utilizzo della memoria locale (che a sua volta può portare a speedup superlineari, rispetto alla versione sequenziale).
+2) La suddivisione lungo le righe fornisce al compilatore un ciclo interno estremamente semplice e regolare, con accessi contigui sia all'input sia agli accumulatori, riducendo significativamente l'eventuale problema di *False Sharing* (sebbene questa soluzione non garantisce banchi di memoria allineati alla cache, anche qualora `TILE_X` venga scelto come multiplo di tale dimensione).
+3) Elimina la lunga catena di dipendenza associata a un singolo accumulatore scalare, rendendo disponibile molto più instruction-level parallelism.
 
 Il risultato è stato nettamente superiore a quello ottenuto con tutte le precedenti modifiche OpenMP. Già con `TILE_X = 64` e senza alcuna direttiva SIMD sul ciclo computazionale, il guadagno rispetto a *Parallel#1* è stato dell'ordine di circa $1.5–2.3\times$, a seconda della dimensione del kernel e dell'immagine. In particolare, il guadagno tende a essere più elevato coi kernel più piccoli e a ridursi con quelli più grandi, seppure rimanendo molto significativo.
 
@@ -391,4 +393,4 @@ auto* greens = static_cast<uint8_t*>(_aligned_malloc(size, CACHE_LINE_SIZE));
 auto* blues = static_cast<uint8_t*>(_aligned_malloc(size, CACHE_LINE_SIZE));
 ```
 
-where `CACHE_LINE_SIZE=64`, depending on your cache configurationand.
+where `CACHE_LINE_SIZE=64`, depending on your cache configuration.
