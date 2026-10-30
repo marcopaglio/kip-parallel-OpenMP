@@ -8,11 +8,11 @@ This is the *Structure-of-Arrays* version of **kip-parallel-OpenMP**. Alternativ
 
 ### Parallelization iter
 
-Il processo di parallelizzazione ha coinvolto unicamente il metodo `ImageProcessing::convolution` e ha seguito un percorso abbastanza coerente con i risultati provvisori via via ottenuti, così riassumibile: anzitutto è stata applicata la parallelizzazione OpenMP del ciclo sulle righe, dopodiché è stato esplorato lo scheduling e la privatizzazione delle variabili, poi `collapse` e le differenze con la vettorizzazione del kernel, fino alla suddivisione manuale del lavoro.
+The parallelization process involved only the `ImageProcessing::convolution` method and followed a path that was fairly consistent with the preliminary results obtained along the way, which can be summarized as follows: first, OpenMP parallelization was applied to the loop over the rows; next, scheduling and variable privatization were explored; then `collapse` and the differences with kernel vectorization were examined; and finally, the work was manually partitioned.
 
-#### Parallelizzazione del ciclo esterno e confronto degli scheduler
+#### Parallelization of the External Cycle and Comparison of Schedulers
 
-La prima versione parallela naturale è stata quella in cui OpenMP distribuisce le iterazioni del ciclo esterno su `y`, i.e. lungo le righe dell'immagine:
+The first natural parallel version is the one in which OpenMP distributes the iterations of the outer loop over `y`, i.e. across the rows of the image:
 
 ```cpp
 #pragma omp parallel for schedule(...)
@@ -23,12 +23,11 @@ for (unsigned int y = 0; y < outputHeight; ++y) {
 }
 ```
 
-L'ipotesi iniziale era che `schedule(static)` fosse la scelta più adatta. Dal punto di vista algoritmico, infatti, ogni iterazione di `y` esegue essenzialmente lo stesso lavoro: percorre `outputWidth` pixel e per ciascun pixel esegue una convoluzione di `order × order` elementi. `static` avrebbe quindi dovuto fornire un buon bilanciamento con un overhead inferiore a `dynamic` e `guided`. Le misurazioni hanno però mostrato qualcosa di diverso:
+The initial assumption was that `schedule(static)` was the best choice. In fact, from an algorithmic standpoint, each iteration of `y` essentially performs the same work: it traverses `outputWidth` pixels and, for each pixel, performs a convolution of `order × order` elements. `static` should therefore have provided a good balance with less overhead than `dynamic` and `guided`. However, the measurements showed something different:
+- Already in the initial experiments, it was observed that **`dynamic` and `guided` were faster than `static`**, with a performance advantage of about 10%; this result suggests that *a uniform number of operations does not necessarily result in perfectly uniform execution times across threads*.
+- Further evidence supporting this impression was obtained by comparing **`static,1` and `static`**, which **delivered nearly identical performance**. The fact that `static,1` does not perform significantly better than the standard `static` is interesting because the two distribute the lines very differently: the former cyclically, the latter typically in contiguous blocks. This makes the hypothesis that the advantage of `dynamic` depends primarily on the specific position of the lines assigned to the threads less convincing. The result points more toward `dynamic`’s ability to absorb small differences in the actual execution times of the threads.
 
-- Già nei primi esperimenti, si è osservato che **`dynamic` e `guided` erano più veloci di `static`**, con un vantaggio di circa il 10%; questo risultato consiglia che l'*uniformità del numero di operazioni non si traduce necessariamente in un tempo di esecuzione perfettamente uniforme fra i thread*. 
-- Ulteriore prova a supporto di questa impressione è stata ottenuta dal confronto fra **`static,1` e `static`**, i quali **hanno fornito prestazioni pressoché identiche**. Il fatto che `static,1` non migliori sensibilmente rispetto allo `static` standard è interessante perché i due distribuiscono le righe in maniera molto diversa: il primo in modo ciclico, il secondo normalmente per blocchi contigui. Questo rende meno convincente l'ipotesi che il vantaggio di `dynamic` dipenda principalmente dalla particolare posizione delle righe assegnate ai thread. Il risultato punta maggiormente verso la capacità di `dynamic` di assorbire piccole differenze nei tempi effettivi dei thread.
-
-Infine, si è provato anche a controllare manualmente la dimensione dei chunk, usando valori derivati da `outputHeight / (omp_get_num_threads() * min_chunk)` con `min_chunk` pari a 1, 2, 4 e 8. In questo caso **le dimensioni di blocco impostate esplicitamente hanno dato risultati peggiori rispetto alla dimensione scelta di default dai rispettivi scheduler**. Di conseguenza, la configurazione che si è consolidata come migliore è rimasta:
+Finally, we also attempted to manually control the chunk size, using values derived from `outputHeight / (omp_get_num_threads() * min_chunk)` with `min_chunk` set to 1, 2, 4, and 8. In this case, **the explicitly set chunk sizes yielded worse results than the size chosen by default by the respective schedulers**. Consequently, the configuration that has established itself as the best remains:
 
 ```cpp
 #pragma omp parallel for schedule(dynamic)
@@ -138,7 +137,7 @@ Questa modifica **ha prodotto piccoli miglioramenti in tutti gli esperimenti ris
 
 ### Restructuring
 
-Dopo aver esplorato le possibilità fornite dalle *sole* direttive OpenMP, si è pensato di indagare sulla rielabolazione dell'algoritmo col fine di ottenere strutture che meglio si prestano alla parallelizzazione.
+After exploring the possibilities offered by *only* the OpenMP directives, we decided to investigate redesigning the algorithm in order to obtain data structures that are better suited for parallelization.
 
 #### Blocking/Tiling 2D
 Innazitutto, è stata introdotta una strategia di **blocking/tiling bidimensionale**. L'idea è di suddividere l'immagine in blocchi rettangolari di dimensione controllata utilizzando due iperparametri (`TILE_Y` e `TILE_X`);  la struttura generale è quindi del tipo:
