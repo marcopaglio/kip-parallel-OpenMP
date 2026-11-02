@@ -8,11 +8,11 @@ This is the *Array-of-Structures* version of **kip-parallel-OpenMP**. Alternativ
 
 ### Parallelization iter
 
-Il processo di parallelizzazione ha coinvolto unicamente il metodo `ImageProcessing::convolution` e ha seguito un percorso guidato dai risultati provvisori via via ottenuti, così riassumibile: anzitutto è stata applicata la parallelizzazione OpenMP del ciclo sulle righe, dopodiché è stato esplorato lo scheduling e la privatizzazione delle variabili, poi `collapse` e le differenze con la vettorizzazione del kernel, fino alla suddivisione manuale del lavoro.
+The parallelization process involved only the `ImageProcessing::convolution` method and followed a path that was fairly consistent with the preliminary results obtained along the way, which can be summarized as follows: first, OpenMP parallelization was applied to the loop over the rows; next, scheduling and variable privatization were explored; then `collapse` and the differences with kernel vectorization were examined; and finally, the work was manually partitioned.
 
-#### Parallelizzazione del ciclo esterno e confronto degli scheduler
+#### Parallelization of the External Cycle and Schedulers Comparison
 
-La prima versione parallela naturale è stata quella in cui OpenMP distribuisce le iterazioni del ciclo esterno su `y`, i.e. lungo le righe dell'immagine:
+The first natural parallel version is the one in which OpenMP distributes the iterations of the outer loop over `y`, i.e. across the rows of the image:
 
 ```cpp
 #pragma omp parallel for schedule(...)
@@ -23,45 +23,45 @@ for (unsigned int y = 0; y < outputHeight; ++y) {
 }
 ```
 
-L'ipotesi iniziale era che `schedule(static)` fosse la scelta più adatta. Dal punto di vista algoritmico, infatti, ogni iterazione di `y` esegue essenzialmente lo stesso lavoro: percorre `outputWidth` pixel e per ciascun pixel esegue una convoluzione di `order × order` elementi. `static` avrebbe quindi dovuto fornire un buon bilanciamento con un overhead inferiore a `dynamic` e `guided`. Le misurazioni hanno però mostrato qualcosa di diverso:
+The initial assumption was that `schedule(static)` was the best choice. In fact, from an algorithmic standpoint, each iteration of `y` essentially performs the same work: it traverses `outputWidth` pixels and, for each pixel, performs a convolution of `order × order` elements. `static` should therefore have provided a good balance with less overhead than `dynamic` and `guided`. However, the measurements showed something different:
+- Already in the initial experiments, it was observed that **`dynamic` and `guided` were faster than `static`**, with a performance advantage of about 10%; this result suggests that *a uniform number of operations does not necessarily result in perfectly uniform execution times across threads*.
+- Further evidence supporting this impression was obtained by comparing **`static,1` and `static`**, which **delivered nearly identical performance**. The fact that `static,1` does not perform significantly better than the standard `static` is interesting because the two distribute the lines very differently: the former cyclically, the latter typically in contiguous blocks. This makes the hypothesis that the advantage of `dynamic` depends primarily on the specific position of the lines assigned to the threads less convincing. The result points more toward `dynamic`’s ability to absorb small differences in the actual execution times of the threads.
 
-- Già nei primi esperimenti, si è osservato che **`dynamic` e `guided` erano più veloci di `static`**, con un vantaggio di circa il 10%; questo risultato consiglia che l'*uniformità del numero di operazioni non si traduce necessariamente in un tempo di esecuzione perfettamente uniforme fra i thread*. 
-- Ulteriore prova a supporto di questa impressione è stata ottenuta dal confronto fra **`static,1` e `static`**, i quali **hanno fornito prestazioni pressoché identiche**. Il fatto che `static,1` non migliori sensibilmente rispetto allo `static` standard è interessante perché i due distribuiscono le righe in maniera molto diversa: il primo in modo ciclico, il secondo normalmente per blocchi contigui. Questo rende meno convincente l'ipotesi che il vantaggio di `dynamic` dipenda principalmente dalla particolare posizione delle righe assegnate ai thread. Il risultato punta maggiormente verso la capacità di `dynamic` di assorbire piccole differenze nei tempi effettivi dei thread.
-
-Infine, si è provato anche a controllare manualmente la dimensione dei chunk, usando valori derivati da `outputHeight / (omp_get_num_threads() * min_chunk)` con `min_chunk` pari a 1, 2, 4 e 8. In questo caso **le dimensioni di blocco impostate esplicitamente hanno dato risultati peggiori rispetto alla dimensione scelta di default dai rispettivi scheduler**. Di conseguenza, la configurazione che si è consolidata come migliore è rimasta:
+Finally, we also attempted to manually control the chunk size, using values derived from `outputHeight / (omp_get_num_threads() * min_chunk)` with `min_chunk` set to 1, 2, 4, and 8. In this case, **the explicitly set chunk sizes yielded worse results than the size chosen by default by the respective schedulers**. Consequently, the configuration that has established itself as the best remains:
 
 ```cpp
 #pragma omp parallel for schedule(dynamic)
 ```
 
-#### Scelta tra `shared` e `firstprivate`
+#### Choosing between `shared` and `firstprivate`
 
-Un'altra parte della sperimentazione ha riguardato la classificazione delle variabili nella regione OpenMP, resa esplicita tramite `default(none)`. La configurazione attuale è:
+Another part of the experiment involved the classification of variables in the OpenMP region, which is made explicit using `default(none)`. The current configuration is:
 
 ```cpp
 shared(pixels, originalData, outputHeight) \
 firstprivate(outputWidth, order, kernelWeights)
 ```
 
-L'idea generale seguita è stata distinguere tra variabili grandi o condivise naturalmente tra tutti i thread e variabili scalari, piccole e molto frequentemente utilizzate; per queste ultime, `firstprivate` può essere ragionevole perché ogni thread riceve una propria copia inizializzata con il valore originale, mentre per strutture dati più grandi, invece, `shared` evita il costo della copia privata. A tal proposito:
+The general approach taken was to distinguish between large variables or those naturally shared among all threads, and scalar variables which are small and used very frequently; for the latter, `firstprivate` may be a reasonable choice because each thread receives its own copy initialized with the original value, whereas for larger data structures, `shared` avoids the cost of a private copy. In this regard:
 
-- Per il vettore di output (`pixels`) la scelta `shared` è naturale e necessaria. Tutti i thread devono contribuire allo stesso risultato finale, ma ciascuna iterazione `(y,x)` scrive in una posizione differente, per cui non vi possono essere race condition.
-- Lo stesso ragionamento, ma per motivi diversi, vale per `originalData`. Questo vettore viene utilizzati esclusivamente in lettura ed è molto grande rispetto alle altre variabili della regione parallela. `shared` è quindi la scelta più sensata: non esiste alcun rischio di data race dovuto alle letture concorrenti e una copia per thread avrebbe un costo potenzialmente molto elevato in memoria e inizializzazione.
-- `outputHeight` è stato mantenuto `shared`. È un valore scalare read-only e viene utilizzato principalmente come limite dello spazio di iterazione esterno. Dal punto di vista correttezza potrebbe essere anche `firstprivate`, ma essendo poco utilizzato all'interno del kernel vero e proprio non c'è una motivazione concreta per crearne una copia privata per thread.
-- Per `outputWidth` e `order`è stato invece scelto `firstprivate`. La motivazione è che si tratta di scalari molto piccoli, quindi il costo di duplicazione è trascurabile; inoltre vengono utilizzati frequentemente nella regione parallela. 
-- Il caso più ambiguo è stato `kernelWeights`: di fatto, non è uno scalare ma si tratta di un contenitore di $order^2$ coefficienti. Poiché read-only, si potrebbe pensare che `shared` sia preferibile per `kernelWeights`, in modo da evitarsi anche il costo di costruzione e copia del vettore per ogni thread. Tuttavia i risultati sperimentali mostrano piccole variazioni dipendenti dalla dimensione del kernel: la conclusione più corretta è che non vi sia un vincitore assoluto, ma di continuare a tenerla in considerazione per i futuri esperimenti. Di fatto, tali differenze sembrano riconducibili più a effetti microarchitetturali che a una differenza fondamentale nel modello OpenMP. In conclusione, per il momento, si è optato per mantenerla privata per ogni thread seguendo l'idea di privatizzare quanto più possibile.
+- For the output vectors (`pixels`), the `shared` option is both natural and necessary. All threads must contribute to the same final result, but each `(y,x)` iteration writes to a different location, so there can be no race conditions.
+- The same reasoning holds for `originalData`, though for different reasons. This vector is read-only and is much larger than the other variables in the parallel region. `shared` is therefore the most sensible choice: there is no risk of a data race due to concurrent reads, and a separate copy per thread would potentially incur a very high cost in terms of memory and initialization.
+- `outputHeight` has been kept as `shared`. It is a read-only scalar value and is primarily used as a bound for the outer iteration space. From a correctness standpoint, it could also be `firstprivate`, but since it is rarely used within the actual kernel, there is no concrete reason to create a private copy for each thread.
+- For `outputWidth` and `order`, instead, `firstprivate` was chosen. The reason is that these are very small scalars, so the cost of duplication is negligible; furthermore, they are frequently used in the parallel region. 
+- The most ambiguous case was `kernelWeights`: in fact, it is not a scalar but a container of $order^2$ coefficients. Since it is read-only, one might think that `shared` is preferable for `kernelWeights`, in order to avoid the cost of constructing and copying the vector for each thread. However, the experimental results show small variations depending on the kernel size: the most accurate conclusion is that there is no clear winner, but that this should continue to be taken into account for future experiments. In fact, these differences seem to be attributable more to microarchitectural effects than to a fundamental difference in the OpenMP model. In conclusion, for the time being, we have opted to keep it private for each thread, following the principle of privatizing as much as possible.
 
-Complessivamente, queste prime due modifiche hanno determinato degli ottimi risultati rispetto alla versione sequenziale del problema, per cui si identifica con *Parallel#0* la versione del programma come delineata finora. I relativi risultati sulle performance sono riportati in [Parallel#0's Experimental Results](https://github.com/marcopaglio/kip-parallel-OpenMP/tree/parallel%230/AoS#experimental-results "Experimental results section for the first parallelization of kip-parallel-openMP's AoS version").
+Overall, these first two modifications have yielded excellent results compared to the sequential version of the problem; therefore, the version of the program described so far is identified as *Parallel#0*. The corresponding performance results are reported in [Parallel#0's Experimental Results](https://github.com/marcopaglio/kip-parallel-OpenMP/tree/parallel%230/AoS#experimental-results "Experimental results section for the first parallelization of kip-parallel-openMP's AoS version").
 
-#### Introduzione di `collapse`
+#### Using `collapse`
 
-Successivamente si è provato a sfruttare l'indipendenza completa dei primi due cicli, i.e. lo spostamento lungo le righe (`y`) e le colonne (`x`) dell'immagine, utilizzando `collapse(2)` con l'obiettivo di aumentare lo spazio di iterazioni disponibile al runtime OpenMP. Invece di distribuire soltanto `outputHeight` righe, OpenMP avrebbe potuto distribuire l'intero spazio `outputHeight × outputWidth` dei pixel.
+Next, we attempted to take advantage of the complete independence of the first two loops, i.e. the movement along the rows (`y`) and columns (`x`) of the image, by using `collapse(2)`, with the goal of increasing the number of iterations available to the OpenMP runtime. Instead of distributing only `outputHeight` rows, OpenMP could have distributed the entire `outputHeight × outputWidth` pixel space.
 
-In generale, però, si è osservato **un leggero peggioramento delle prestazioni**. Questo è motivabile con il fatto che il parallelismo applicato sul solo ciclo `y` fosse già ampiamente sufficiente data la dimensione delle immagini (> 4000x2000 pixel), e pertanto l'introduzione di `collapse` non risolve una carenza di lavoro da distribuire.
+In general, however, **a slight performance degradation** was observed. This can be explained by the fact that the parallelism applied to the `y` loop alone was already more than sufficient given the size of the images (> 4000x2000 pixels), and therefore the introduction of `collapse` does not address a shortage of work to be distributed.
 
-#### Riduzione SIMD sul kernel
 
-Un'altra fetta di esperimenti ha riguardato i due cicli interni del kernel, i.e. lungo le righe (`j`) e le colonne (`i`) del kernel:
+#### SIMD Reduction on the Kernel
+
+Another set of experiments focused on the kernel's two inner loops, i.e. along the rows (`j`) and columns (`i`) of the kernel:
 
 ```cpp
 for (unsigned int j = 0; j < order; ++j) {
@@ -71,10 +71,10 @@ for (unsigned int j = 0; j < order; ++j) {
 }
 ```
 
-Poiché questi cicli accumulano i valori di `channelRed`, `channelGreen` e `channelBlue`, si prestano particolarmente bene per l'applicazione del *pattern di riduzione*. Affinché potesse essere applicato senza dover generare ulteriori thread mediante un’altra direttiva `for` (oltre a quella già applicata al ciclo `y` — approccio che, sperimentalmente, ha mostrato una drastica riduzione delle prestazioni), è stato considerato l’utilizzo della direttiva `simd`, in modo da vettorizzare il ciclo interno senza ricorrere al worksharing.
-Le modalità testate sono state principalmente due:
+Since these loops accumulate the values of `channelRed`, `channelGreen`, and `channelBlue`, they are particularly well-suited for applying the *reduction pattern*. To apply this pattern without having to generate additional threads by using another `for` directive (in addition to the one already applied to the `y` loop — an approach that, in testing, resulted in a drastic drop in performance), we considered using the `simd` directive to vectorize the inner loop without resorting to worksharing.
+We tested two main approaches:
 
-1. Tramite l'utilizzo combinato di `collapse`:
+1. Through the combined use of `collapse`:
 
 ```cpp
 #pragma omp simd collapse(2) reduction(+:channelRed, channelGreen, channelBlue)
@@ -85,7 +85,7 @@ for (unsigned int j = 0; j < order; ++j) {
 }
 ```
 
-2) Applicando la SIMD direttamente a `i`, cioè agli elementi consecutivi di una stessa riga dell'immagine e del kernel:
+2) By applying SIMD directly to `i`, i.e. to consecutive elements in the same row of both image and kernel:
 
 ```cpp
 for (unsigned int j = 0; j < order; ++j) {
@@ -98,13 +98,12 @@ for (unsigned int j = 0; j < order; ++j) {
 }
 ```
 
-In entrambi i casi, **le prestazioni sono rimaste identiche**, principalmente perché nella forma AoS il compilatore non riesce a vettorizzare i cicli. A dimostrazione di ciò, durante la compilazione restituisce il warning `loop not vectorized`, pertanto le direttive stesse non vengono considerate.
+In both cases, **performance remained the same**, mainly because in the AoS form, the compiler is unable to vectorize the loops. As evidence of this, it returns the warning `loop not vectorized` during compilation, meaning that the directives themselves are not taken into account.
 
-#### Divisione manuale del lavoro tra thread
+#### Manual worksharing among threads
 
-Il passo successivo è stato quello di provare ad eliminare completamente il worksharing construct `omp for`, mantenendo la sola regione `parallel`, e calcolando manualmente per ogni thread un intervallo di righe.
-
-La prima versione è stata:
+The next step was to try to completely eliminate the `omp for` worksharing construct, retaining only the `parallel` region, and manually calculating a range of rows for each thread.
+The first version was:
 
 ```cpp
 lowerBound = outputHeight / nthreads * thread_id;
@@ -115,9 +114,9 @@ upperBound =
     : outputHeight / nthreads * (thread_id + 1);
 ```
 
-L'obiettivo era verificare se eliminando l'intervento dello scheduler OpenMP fosse possibile ottenere prestazioni migliori. Il risultato ottenuto è stato però un **peggioramento netto**.
+The goal was to determine whether eliminating the OpenMP scheduler’s intervention would result in better performance. However, the results showed a **clear deterioration**.
 
-È stato quindi individuato un problema in questa prima versione: tutto il resto della divisione viene assegnato all'ultimo thread; ciò potrebbe rendere la suddivisione manuale vana dal momento che tutti i thread dovrebbero attendere la fine del maggior carico di lavoro dell'ultimo thread. Si è dunque proposto una modalità *fair*, in cui le righe residue vengono distribuite una per volta ai primi thread:
+A problem was therefore identified in this first version: the rest of the division is assigned to the last thread; this could render manual partitioning ineffective, since all threads would have to wait for the last thread to finish its heavier workload. A *fair* mode was therefore proposed, in which the remaining lines are distributed one at a time to the first threads:
 
 ```cpp
 const unsigned int base = outputHeight / nthreads;
@@ -132,25 +131,25 @@ upperBound =
     (thread_id < remainder ? 1 : 0);
 ```
 
-Questa modifica **ha prodotto piccoli miglioramenti in tutti gli esperimenti rispetto alla prima divisione manuale**, confermando che il precedente squilibrio fosse reale. Tuttavia, anche dopo aver reso la partizione quasi perfettamente uniforme, **nel complesso la suddivisione manuale non ha portato miglioramenti**. Questo risultato dimostra che il vantaggio del dynamic scheduling non deriva semplicemente da un'implementazione inefficiente dello static scheduling di OpenMP.
+This change **resulted in slight improvements in all experiments compared to the initial manual partitioning**, confirming that the previous imbalance was real. However, even after making the partitioning nearly perfectly uniform, **overall, the manual partitioning did not lead to any improvements**. This result demonstrates that the advantage of dynamic scheduling does not simply stem from an inefficient implementation of OpenMP’s static scheduling.
 
 ### Restructuring
 
-Dopo aver esplorato le possibilità fornite dalle *sole* direttive OpenMP, si è pensato di indagare sulla rielabolazione dell'algoritmo col fine di ottenere strutture che meglio si prestano alla parallelizzazione.
+After exploring the possibilities offered by *only* the OpenMP directives, we decided to investigate redesigning the algorithm in order to obtain data structures that are better suited for parallelization.
 
-#### Tiling orizzontale
+#### Horizontal Tiling
 
-Ispirandosi ai benefici ottenuti nella versione SoA, è stata innanzitutto introdotta una strategia di **tiling orizzontale**, volta a modificare radicalmente l'ordine dei loop. La struttura dal quale si è partiti è essenzialmente la seguente:
+Another change was intended to radically alter the order of the loops. The initial structure was essentially as follows:
 
 ```cpp
 for (y)
     for (x)
         for (j)
             for (i)
-                accumula channelRed/Green/Blue
+                accumulate channelRed/Green/Blue
 ```
 
-In questa forma, per ogni pixel venivano inizializzati tre accumulatori scalari e successivamente aggiornati `order²` volte. La nuova strategia ha invece introdotto un tile esclusivamente orizzontale:
+In this approach, three scalar accumulators were initialized for each pixel and subsequently updated $order^2$ times. The new strategy, on the other hand, introduced an exclusively horizontal tile:
 
 ```cpp
 for (y)
@@ -158,28 +157,37 @@ for (y)
         for (j)
             for (i)
                 for (t)
+                  accumulate channelRed/Green/Blue
 ```
 
-dove `t` identifica i pixel all'interno del tile. Per ogni tile vengono creati tre vettori temporanei (`channelReds`, `channelGreens`, `channelBlues`) di dimensione `TILE_X`, e un singolo coefficiente del kernel che viene applicato in sequenza a tutti i pixel del tile. Questa versione presenta due vantaggi principali:
+where `t` identifies the pixels within the tile. For each tile, three temporary vectors (`channelReds`, `channelGreens`, `channelBlues`) of size `TILE_X` are created, along with a single kernel coefficient that is applied sequentially to all pixels in the tile. The visual difference between the image before and after the application of horizontal tiling can be seen in [Fig. 1](#figure-1).
 
-1) Fornisce al compilatore un ciclo interno estremamente semplice e regolare, con accessi contigui sia all'input sia agli accumulatori.
-2) Elimina la lunga catena di dipendenza associata a un singolo accumulatore scalare, rendendo disponibile molto più instruction-level parallelism.
+<p align="center">
+  <img id="figure-1" src="/../assets/horizontal_tiling_before_and_after.png" alt="Visualization of before and after applying horizontal tiling." title="Horizontal tiling visualization" width="90%" />
+</p>
 
-Diversamente dalla controparte SoA, il risultato per AoS si è limitato ad un generico miglioramento di solo il 10% rispetto a quello ottenuto con tutte le precedenti modifiche OpenMP, i.e. *Parallel#0*. In particolare, il guadagno tende a essere più elevato coi kernel più piccoli e a ridursi con quelli più grandi, seppure rimanendo molto significativo. 
+This version offers three main advantages:
 
-Sulla macchina utilizzata, il miglior valore individuato sperimentalmente per l'iperparametro `TILE_X` è stato di `1024`. Tale versione ottenuta è risultata la migliore dal punto di vista delle prestazione ed è stata pertanto marcata come *MainParallel*, e i risultati sperimentali sono in [Experimental Results](#experimental-results).
+1) It allows the *first touch* strategy to be applied to threads on channel accumulators, promoting optimal memory access and the use of local memory (which in turn can lead to superlinear speedups compared to the sequential version).
+2) The row-based partitioning provides the compiler with an extremely simple and regular internal loop, with contiguous accesses to both the input and the accumulators, significantly reducing the potential problem of *false sharing* (although this solution does not guarantee cache-aligned memory banks, even if `TILE_X` is chosen as a multiple of that size).
+3) It eliminates the long dependency chain associated with a single scalar accumulator, making much more instruction-level parallelism available.
 
-#### Applicazione delle direttive SIMD sulla versione `TILE_X`
+Results show a general 10% improvement compared to that achieved with all previous OpenMP modifications (i.e. *Parallel#0*). In particular, the performance gain tends to be higher with smaller kernels and to decrease with larger ones, although it remains very significant.
 
-Una volta ottenuta questa nuova struttura, sono state provate diverse configurazioni SIMD, tuttavia il compilatore ha ancora una volta generato il warning `loop not vectorized`, per cui ogni tentativo di migliorare le prestazioni senza ulteriore worksharing è risultato vano.
+On the machine used, the best value identified experimentally for the hyperparameter `TILE_X` was `1024`. This version proved to be the best in terms of performance and was therefore labeled *MainParallel*, and the experimental results were added to [Experimental Results](#experimental-results).
 
-#### Parallelizzazione dei tile
+#### SIMD directive on `TILE_X`
 
-Dopo aver introdotto il tiling orizzontale `TILE_X`, è stato effettuato un ulteriore esperimento; invece di parallelizzare solamente le righe `y`, si è provato a distribuire direttamente le coppie $$(y,\ tile_x)$$ fra i thread OpenMP mediante `collapse(2)`, con l'obiettivo di aumentare il numero di unità di lavoro disponibili allo scheduler.
+Once this new structure was obtained, several SIMD configurations were tested; however, the compiler once again generated the warning `loop not vectorized`, so every attempt to improve performance without additional worksharing proved futile.
 
-Questa strategia era potenzialmente interessante perché evita il problema del precedente `collapse(2)` applicato direttamente a `(y,x)`, dove l'unità di lavoro diventava un singolo pixel e la granularità risultava troppo fine. In questo caso, invece, ciascuna unità schedulata contiene circa `TILE_X` pixel e quindi una quantità di calcolo molto più elevata.
+#### Tile Parallelization
 
-Sperimentalmente, tuttavia, **la parallelizzazione esplicita dei tile non ha prodotto benefici apprezzabili**, e le prestazioni sono rimaste sostanzialmente comparabili alla versione precedente. Questo risultato suggerisce che, per le immagini e il numero di thread utilizzati, la parallelizzazione del solo ciclo `y` mette già a disposizione una quantità sufficiente di lavoro.
+After introducing horizontal tiling `TILE_X`, a further experiment was conducted; instead of parallelizing only the `y` rows, an attempt was made to distribute the pairs $$(y, tile_x)$$ directly among the OpenMP threads using `collapse(2)`, with the goal of increasing the number of work units available to the scheduler.
+
+This strategy was potentially interesting because it avoids the problem of the previous `collapse(2)` applied directly to `(y,x)`, where the work unit became a single pixel and the granularity was too fine. In this case, however, each scheduled unit contains approximately `TILE_X` pixels and thus a much higher computational load.
+
+Experimentally, however, **explicit tile parallelization did not yield appreciable benefits**, and performance remained essentially comparable to the previous version. This result suggests that, for the images and the number of threads used, parallelizing only the `y` loop already provides a sufficient amount of work.
+
 
 ### Experimental Results
 
@@ -279,7 +287,3 @@ The following tables summarizes the temporal measurements of convolutions on dif
 </table>
 
 It can be seen that the times recorded for inputs of the same size are very similar, indicating that the execution times of the operations are independent of the pixel values.
-
-### Profiling Results
-
-TODO
