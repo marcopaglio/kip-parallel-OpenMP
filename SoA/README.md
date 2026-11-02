@@ -139,21 +139,20 @@ This change **resulted in slight improvements in all experiments compared to the
 After exploring the possibilities offered by *only* the OpenMP directives, we decided to investigate redesigning the algorithm in order to obtain data structures that are better suited for parallelization.
 
 #### Blocking/Tiling 2D
-Innazitutto, è stata introdotta una strategia di **blocking/tiling bidimensionale**. L'idea è di suddividere l'immagine in blocchi rettangolari di dimensione controllata utilizzando due iperparametri (`TILE_Y` e `TILE_X`);  la struttura generale è quindi del tipo:
+
+First, a **two-dimensional blocking/tiling** strategy was introduced. The idea is to divide the image into rectangular blocks of a controlled size using two hyperparameters (`TILE_Y` and `TILE_X`), while maintaining parallelization of the outer blocks via OpenMP and SIMD reduction on loop `i`. The general structure is therefore as follows:
 
 ```cpp
 for (tileY)
     for (tileX)
-        for (y nel tile)
-            for (x nel tile)
-                convoluzione
+        for (y in tile)
+            for (x in tile)
+                convolution
 ```
 
-con parallelizzazione dei tile esterni tramite OpenMP e mantenendo la riduzione SIMD sul ciclo `i`.
+The main purpose of tiling was to improve **data locality**, promoting the reuse of image portions belonging to neighboring convolution windows and reducing the active working set for each thread. Furthermore, compared to a simple `collapse(2)` on `(y,x)`, the tile allowed for a coarser and more controllable granularity.
 
-Lo scopo principale del tiling sarebbe stata quella di migliorare la **locality dei dati**, favorendo il riutilizzo delle porzioni di immagine che appartengono a finestre di convoluzione vicine e riducendo il working set attivo per ciascun thread. Inoltre, rispetto a un semplice `collapse(2)` su `(y,x)`, il tile permetteva di mantenere una granularità più grossa e più controllabile.
-
-Sono state provate diverse configurazioni, fra cui:
+Several configurations were tested, both in the variant with `#pragma omp simd reduction(...)` and in the analogous variant without the `reduction` clause, including:
 
 ```text
 TILE_Y = 4,  TILE_X = 64
@@ -161,25 +160,23 @@ TILE_Y = 8,  TILE_X = 128
 TILE_Y = 16, TILE_X = 256
 ```
 
-sia nella variante con `#pragma omp simd reduction(...)` sia nell'analoga variante ma senza la clausola `reduction`. 
+The results, however, did not show any structural improvement. In most cases, the differences compared to the version without tiling were limited to a few percentage points, with some minor improvements and some minor deteriorations depending on the image/kernel/tile combination: therefore, no universally superior configuration emerged.
 
-I risultati, però, non hanno mostrato un miglioramento strutturale. Nella maggior parte dei casi le differenze rispetto alla versione senza tiling sono rimaste contenute in pochi punti percentuali, con alcuni piccoli miglioramenti e alcuni piccoli peggioramenti a seconda della combinazione immagine/kernel/tile: non è quindi emersa una configurazione universalmente migliore.
+The conclusion, therefore, is that **traditional 2D blocking is not the program’s main bottleneck**: in fact, convolution continues to show a significant increase in execution time as `order` increases, and tiling does not substantially alter this trend. This experiment was nevertheless useful because it suggested that it was necessary to optimize not only the positioning of data in the cache, but also the **structure of the loops and internal dependencies within the kernel**.
 
-La conclusione è quindi che **il blocking 2D tradizionale non rappresenta il collo di bottiglia principale del programma**: la convoluzione continua infatti a mostrare una crescita significativa del tempo all'aumentare di `order`, e il tiling non modifica sostanzialmente questa tendenza. Questo esperimento è stato comunque utile perché ha suggerito che fosse necessario intervenire non soltanto sulla posizione dei dati in cache, ma sulla **struttura stessa dei loop e delle dipendenze interne al kernel**.
+#### Horizontal Tiling
 
-#### Tiling orizzontale
-
-Un altro cambiamento ha voluto modificare radicalmente l'ordine dei loop. La struttura dal quale si è partiti è essenzialmente la seguente:
+Another change was intended to radically alter the order of the loops. The initial structure was essentially as follows:
 
 ```cpp
 for (y)
     for (x)
         for (j)
             for (i)
-                accumula channelRed/Green/Blue
+                accumulate channelRed/Green/Blue
 ```
 
-In questa forma, per ogni pixel venivano inizializzati tre accumulatori scalari e successivamente aggiornati `order²` volte. La nuova strategia ha invece introdotto un tile esclusivamente orizzontale:
+In this approach, three scalar accumulators were initialized for each pixel and subsequently updated `order²` times. The new strategy, on the other hand, introduced an exclusively horizontal tile:
 
 ```cpp
 for (y)
@@ -187,32 +184,32 @@ for (y)
         for (j)
             for (i)
                 for (t)
-                    accumula channelRed/Green/Blue
+                    accumulate channelRed/Green/Blue
 ```
 
-dove `t` identifica i pixel all'interno del tile. Per ogni tile vengono creati tre vettori temporanei (`channelReds`, `channelGreens`, `channelBlues`) di dimensione `TILE_X`, e un singolo coefficiente del kernel che viene applicato in sequenza a tutti i pixel del tile. La differenza visuale fra il prima e dopo l'applicazione del tiling orizzontale è possibile vederla in [Fig. 1](#figure-1).
+where `t` identifies the pixels within the tile. For each tile, three temporary vectors (`channelReds`, `channelGreens`, `channelBlues`) of size `TILE_X` are created, along with a single kernel coefficient that is applied sequentially to all pixels in the tile. The visual difference between the image before and after the application of horizontal tiling can be seen in [Fig. 1](#figure-1).
 
 <p align="center">
   <img id="figure-1" src="/../assets/horizontal_tiling_before_and_after.png" alt="Visualization of before and after applying horizontal tiling." title="Horizontal tiling visualization" width="90%" />
 </p>
 
-Questa versione presenta tre vantaggi principali:
+This version offers three main advantages:
 
-1) Consente di applicare la strategia di *first touch* per i thread sugli accumulatori dei canali favorendo accessi ottimali alla memoria e l'utilizzo della memoria locale (che a sua volta può portare a speedup superlineari, rispetto alla versione sequenziale).
-2) La suddivisione lungo le righe fornisce al compilatore un ciclo interno estremamente semplice e regolare, con accessi contigui sia all'input sia agli accumulatori, riducendo significativamente l'eventuale problema di *False Sharing* (sebbene questa soluzione non garantisce banchi di memoria allineati alla cache, anche qualora `TILE_X` venga scelto come multiplo di tale dimensione).
-3) Elimina la lunga catena di dipendenza associata a un singolo accumulatore scalare, rendendo disponibile molto più instruction-level parallelism.
+1) It allows the *first touch* strategy to be applied to threads on channel accumulators, promoting optimal memory access and the use of local memory (which in turn can lead to superlinear speedups compared to the sequential version).
+2) The row-based partitioning provides the compiler with an extremely simple and regular internal loop, with contiguous accesses to both the input and the accumulators, significantly reducing the potential problem of *false sharing* (although this solution does not guarantee cache-aligned memory banks, even if `TILE_X` is chosen as a multiple of that size).
+3) It eliminates the long dependency chain associated with a single scalar accumulator, making much more instruction-level parallelism available.
 
-Il risultato è stato nettamente superiore a quello ottenuto con tutte le precedenti modifiche OpenMP. Già con `TILE_X = 64` e senza alcuna direttiva SIMD sul ciclo computazionale, il guadagno rispetto a *Parallel#1* è stato dell'ordine di circa $1.5–2.3\times$, a seconda della dimensione del kernel e dell'immagine. In particolare, il guadagno tende a essere più elevato coi kernel più piccoli e a ridursi con quelli più grandi, seppure rimanendo molto significativo.
+The result was significantly better than that obtained with all previous OpenMP modifications. Even with `TILE_X = 64` and without any SIMD directives in the computational loop, the performance gain compared to *Parallel#1* was on the order of approximately $1.5–2.3\times$, depending on the size of the kernel and the image. In particular, the performance gain tends to be higher with smaller kernels and to decrease with larger ones, although it remains very significant.
 
-Sulla macchina utilizzata, il miglior valore individuato sperimentalmente per l'iperparametro `TILE_X` è stato di `1024`, sebbene il vantaggio rispetto a `64` sia molto piccolo.
+On the machine used, the best value identified experimentally for the hyperparameter `TILE_X` was `1024`, although the advantage over `64` is very small.
 
-#### Applicazione delle direttive SIMD sulla versione `TILE_X`
+#### SIMD directive on `TILE_X`
 
-Una volta ottenuta questa nuova struttura, sono state provate diverse configurazioni SIMD. 
+Once this new structure was obtained, several SIMD configurations were tested.
 
-È stato anzitutto inserito `#pragma omp simd` sul ciclo computazionale interno `t`. Contrariamente alle aspettative, la direttiva **non ha prodotto alcun miglioramento apprezzabile**: in alcuni test le prestazioni sono rimaste praticamente identiche, mentre in altri sono peggiorate leggermente. Questo suggerisce che il compilatore sia già in grado di ottimizzare e probabilmente auto-vettorizzare quel ciclo grazie alla nuova struttura molto più regolare.
+First, `#pragma omp simd` was inserted into the internal computational loop `t`. Contrary to expectations, the directive **did not produce any noticeable improvement**: in some tests, performance remained virtually identical, while in others it deteriorated slightly. This suggests that the compiler is already able to optimize and likely auto-vectorize that loop thanks to the new, much more regular structure.
 
-È stata invece osservata una piccola ma abbastanza consistente utilità nell'applicare la stessa direttiva al ciclo finale che converte gli accumulatori floating point e salva i pixel:
+On the other hand, a small but fairly consistent benefit was observed when applying the same directive to the final loop that converts the floating-point accumulators and saves the pixels:
 
 ```cpp
 #pragma omp simd
@@ -223,15 +220,16 @@ Una volta ottenuta questa nuova struttura, sono state provate diverse configuraz
     }
 ```
 
-Tale versione ottenuta è risultata la migliore dal punto di vista delle prestazione ed è stata pertanto marcata come *MainParallel*, e i risultati sperimentali sono stati aggiunti in [Experimental Results](#experimental-results).
+This version proved to be the best in terms of performance and was therefore labeled *MainParallel*, and the experimental results were added to [Experimental Results](#experimental-results).
 
-#### Parallelizzazione dei tile
+#### Tile Parallelization
 
-Dopo aver introdotto il tiling orizzontale `TILE_X`, è stato effettuato un ulteriore esperimento; invece di parallelizzare solamente le righe `y`, si è provato a distribuire direttamente le coppie $$(y,\ tile_x)$$ fra i thread OpenMP mediante `collapse(2)`, con l'obiettivo di aumentare il numero di unità di lavoro disponibili allo scheduler.
+After introducing horizontal tiling `TILE_X`, a further experiment was conducted; instead of parallelizing only the `y` rows, an attempt was made to distribute the pairs $$(y, tile_x)$$ directly among the OpenMP threads using `collapse(2)`, with the goal of increasing the number of work units available to the scheduler.
 
-Questa strategia era potenzialmente interessante perché evita il problema del precedente `collapse(2)` applicato direttamente a `(y,x)`, dove l'unità di lavoro diventava un singolo pixel e la granularità risultava troppo fine. In questo caso, invece, ciascuna unità schedulata contiene circa `TILE_X` pixel e quindi una quantità di calcolo molto più elevata.
+This strategy was potentially interesting because it avoids the problem of the previous `collapse(2)` applied directly to `(y,x)`, where the work unit became a single pixel and the granularity was too fine. In this case, however, each scheduled unit contains approximately `TILE_X` pixels and thus a much higher computational load.
 
-Sperimentalmente, tuttavia, **la parallelizzazione esplicita dei tile non ha prodotto benefici apprezzabili**, e le prestazioni sono rimaste sostanzialmente comparabili alla versione precedente. Questo risultato suggerisce che, per le immagini e il numero di thread utilizzati, la parallelizzazione del solo ciclo `y` mette già a disposizione una quantità sufficiente di lavoro.
+Experimentally, however, **explicit tile parallelization did not yield appreciable benefits**, and performance remained essentially comparable to the previous version. This result suggests that, for the images and the number of threads used, parallelizing only the `y` loop already provides a sufficient amount of work.
+
 
 ### Experimental Results
 
