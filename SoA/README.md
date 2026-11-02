@@ -10,7 +10,7 @@ This is the *Structure-of-Arrays* version of **kip-parallel-OpenMP**. Alternativ
 
 The parallelization process involved only the `ImageProcessing::convolution` method and followed a path that was fairly consistent with the preliminary results obtained along the way, which can be summarized as follows: first, OpenMP parallelization was applied to the loop over the rows; next, scheduling and variable privatization were explored; then `collapse` and the differences with kernel vectorization were examined; and finally, the work was manually partitioned.
 
-#### Parallelization of the External Cycle and Comparison of Schedulers
+#### Parallelization of the External Cycle and Schedulers Comparison
 
 The first natural parallel version is the one in which OpenMP distributes the iterations of the outer loop over `y`, i.e. across the rows of the image:
 
@@ -33,34 +33,34 @@ Finally, we also attempted to manually control the chunk size, using values deri
 #pragma omp parallel for schedule(dynamic)
 ```
 
-#### Scelta tra `shared` e `firstprivate`
+#### Choosing between `shared` and `firstprivate`
 
-Un'altra parte della sperimentazione ha riguardato la classificazione delle variabili nella regione OpenMP, resa esplicita tramite `default(none)`. La configurazione attuale è:
+Another part of the experiment involved the classification of variables in the OpenMP region, which is made explicit using `default(none)`. The current configuration is:
 
 ```cpp
 shared(reds, greens, blues, originalReds, originalGreens, originalBlues, outputHeight) \
 firstprivate(width, outputWidth, order, kernelWeights)
 ```
 
-L'idea generale seguita è stata distinguere tra variabili grandi o condivise naturalmente tra tutti i thread e variabili scalari, piccole e molto frequentemente utilizzate; per queste ultime, `firstprivate` può essere ragionevole perché ogni thread riceve una propria copia inizializzata con il valore originale, mentre per strutture dati più grandi, invece, `shared` evita il costo della copia privata. A tal proposito:
+The general approach taken was to distinguish between large variables or those naturally shared among all threads, and scalar variables which are small and used very frequently; for the latter, `firstprivate` may be a reasonable choice because each thread receives its own copy initialized with the original value, whereas for larger data structures, `shared` avoids the cost of a private copy. In this regard:
 
-- Per i vettori di output (`reds`, `greens`, `blues`) la scelta `shared` è naturale e necessaria. Tutti i thread devono contribuire allo stesso risultato finale, ma ciascuna iterazione `(y,x)` scrive in una posizione differente, per cui non vi possono essere race condition.
-- Lo stesso ragionamento, ma per motivi diversi, vale per `originalReds`, `originalGreens`, `originalBlues`. Questi vettori sono utilizzati esclusivamente in lettura e sono molto grandi rispetto alle altre variabili della regione parallela. `shared` è quindi la scelta più sensata: non esiste alcun rischio di data race dovuto alle letture concorrenti e una copia per thread avrebbe un costo potenzialmente molto elevato in memoria e inizializzazione.
-- `outputHeight` è stato mantenuto `shared`. È un valore scalare read-only e viene utilizzato principalmente come limite dello spazio di iterazione esterno. Dal punto di vista correttezza potrebbe essere anche `firstprivate`, ma essendo poco utilizzato all'interno del kernel vero e proprio non c'è una motivazione concreta per crearne una copia privata per thread.
-- Per `width`, `outputWidth` e `order`è stato invece scelto `firstprivate`. La motivazione è che si tratta di scalari molto piccoli, quindi il costo di duplicazione è trascurabile; inoltre vengono utilizzati frequentemente nella regione parallela. 
-- Il caso più ambiguo è stato `kernelWeights`: di fatto, non è uno scalare ma si tratta di un contenitore di $order^2$ coefficienti. Poiché read-only, si potrebbe pensare che `shared` sia preferibile per `kernelWeights`, in modo da evitarsi anche il costo di costruzione e copia del vettore per ogni thread. Tuttavia i risultati sperimentali mostrano piccole variazioni dipendenti dalla dimensione del kernel: la conclusione più corretta è che non vi sia un vincitore assoluto, ma di continuare a tenerla in considerazione per i futuri esperimenti. Di fatto, tali differenze sembrano riconducibili più a effetti microarchitetturali che a una differenza fondamentale nel modello OpenMP. In conclusione, per il momento, si è optato per mantenerla privata per ogni thread seguendo l'idea di privatizzare quanto più possibile.
+- For the output vectors (`reds`, `greens`, `blues`), the `shared` option is both natural and necessary. All threads must contribute to the same final result, but each `(y,x)` iteration writes to a different location, so there can be no race conditions.
+- The same reasoning holds for `originalReds`, `originalGreens`, and `originalBlues`, though for different reasons. These vectors are read-only and are much larger than the other variables in the parallel region. `shared` is therefore the most sensible choice: there is no risk of a data race due to concurrent reads, and a separate copy per thread would potentially incur a very high cost in terms of memory and initialization.
+- `outputHeight` has been kept as `shared`. It is a read-only scalar value and is primarily used as a bound for the outer iteration space. From a correctness standpoint, it could also be `firstprivate`, but since it is rarely used within the actual kernel, there is no concrete reason to create a private copy for each thread.
+- For `width`, `outputWidth`, and `order`, instead `firstprivate` was chosen. The reason is that these are very small scalars, so the cost of duplication is negligible; furthermore, they are frequently used in the parallel region.
+- The most ambiguous case was `kernelWeights`: in fact, it is not a scalar but a container of $order^2$ coefficients. Since it is read-only, one might think that `shared` is preferable for `kernelWeights`, in order to avoid the cost of constructing and copying the vector for each thread. However, the experimental results show small variations depending on the kernel size: the most accurate conclusion is that there is no clear winner, but that this should continue to be taken into account for future experiments. In fact, these differences seem to be attributable more to microarchitectural effects than to a fundamental difference in the OpenMP model. In conclusion, for the time being, we have opted to keep it private for each thread, following the principle of privatizing as much as possible.
 
-Complessivamente, queste prime due modifiche hanno determinato degli ottimi risultati rispetto alla versione sequenziale del problema, per cui si identifica con *Parallel#0* la versione del programma come delineata finora. I relativi risultati sulle performance sono riportati in [Parallel#0's Experimental Results](https://github.com/marcopaglio/kip-parallel-OpenMP/tree/parallel%230/SoA#experimental-results "Experimental results section for the first parallelization of kip-parallel-openMP's SoA version").
+Overall, these first two modifications have yielded excellent results compared to the sequential version of the problem; therefore, the version of the program described so far is identified as *Parallel#0*. The corresponding performance results are reported in [Parallel#0's Experimental Results](https://github.com/marcopaglio/kip-parallel-OpenMP/tree/parallel%230/SoA#experimental-results "Experimental results section for the first parallelization of kip-parallel-openMP's SoA version").
 
-#### Introduzione di `collapse`
+#### Using `collapse`
 
-Successivamente si è provato a sfruttare l'indipendenza completa dei primi due cicli, i.e. lo spostamento lungo le righe (`y`) e le colonne (`x`) dell'immagine, utilizzando `collapse(2)` con l'obiettivo di aumentare lo spazio di iterazioni disponibile al runtime OpenMP. Invece di distribuire soltanto `outputHeight` righe, OpenMP avrebbe potuto distribuire l'intero spazio `outputHeight × outputWidth` dei pixel.
+Next, we attempted to take advantage of the complete independence of the first two loops, i.e. the movement along the rows (`y`) and columns (`x`) of the image, by using `collapse(2)`, with the goal of increasing the number of iterations available to the OpenMP runtime. Instead of distributing only `outputHeight` rows, OpenMP could have distributed the entire `outputHeight × outputWidth` pixel space.
 
-In generale, però, si è osservato **un leggero peggioramento delle prestazioni**. Questo è motivabile con il fatto che il parallelismo applicato sul solo ciclo `y` fosse già ampiamente sufficiente data la dimensione delle immagini (> 4000x2000 pixel), e pertanto l'introduzione di `collapse` non risolve una carenza di lavoro da distribuire.
+In general, however, **a slight performance degradation** was observed. This can be explained by the fact that the parallelism applied to the `y` loop alone was already more than sufficient given the size of the images (> 4000x2000 pixels), and therefore the introduction of `collapse` does not address a shortage of work to be distributed.
 
-#### Riduzione SIMD sul kernel
+#### SIMD Reduction on the Kernel
 
-Un'altra fetta di esperimenti ha riguardato i due cicli interni del kernel, i.e. lungo le righe (`j`) e le colonne (`i`) del kernel:
+Another set of experiments focused on the kernel's two inner loops, i.e. along the rows (`j`) and columns (`i`) of the kernel:
 
 ```cpp
 for (unsigned int j = 0; j < order; ++j) {
@@ -70,10 +70,10 @@ for (unsigned int j = 0; j < order; ++j) {
 }
 ```
 
-Poiché questi cicli accumulano i valori di `channelRed`, `channelGreen` e `channelBlue`, si prestano particolarmente bene per l'applicazione del *pattern di riduzione*. Affinché potesse essere applicato senza dover generare ulteriori thread mediante un’altra direttiva `for` (oltre a quella già applicata al ciclo `y` — approccio che, sperimentalmente, ha mostrato una drastica riduzione delle prestazioni), è stato considerato l’utilizzo della direttiva `simd`, in modo da vettorizzare il ciclo interno senza ricorrere al worksharing.
-Le modalità testate sono state principalmente due:
+Since these loops accumulate the values of `channelRed`, `channelGreen`, and `channelBlue`, they are particularly well-suited for applying the *reduction pattern*. To apply this pattern without having to generate additional threads by using another `for` directive (in addition to the one already applied to the `y` loop — an approach that, in testing, resulted in a drastic drop in performance), we considered using the `simd` directive to vectorize the inner loop without resorting to worksharing.
+We tested two main approaches:
 
-1. Tramite l'utilizzo combinato di `collapse`:
+1. Through the combined use of `collapse`:
 
 ```cpp
 #pragma omp simd collapse(2) reduction(+:channelRed, channelGreen, channelBlue)
@@ -84,9 +84,9 @@ for (unsigned int j = 0; j < order; ++j) {
 }
 ```
 
-Tuttavia, **le prestazioni sono peggiorate in modo consistente e il peggioramento è aumentato al crescere delle dimensioni degli input**.
+However, **performance has deteriorated significantly, and this deterioration has increased as the size of the inputs has grown**.
 
-2) Applicando la SIMD direttamente a `i`, cioè agli elementi consecutivi di una stessa riga dell'immagine e del kernel:
+2) By applying SIMD directly to `i`, i.e. to consecutive elements in the same row of both image and kernel:
 
 ```cpp
 for (unsigned int j = 0; j < order; ++j) {
@@ -99,13 +99,12 @@ for (unsigned int j = 0; j < order; ++j) {
 }
 ```
 
-**Questa forma ha ottenuto miglioramenti** veramente consistenti, **di oltre 2x per i kernel più grossi**. A tal proposito, si è voluto etichettare tale versione parallela come *Parallel#1*, cioè la migliore di questa prima parte di esperimenti, i cui risultati sono riportati in [Parallel#1's Experimental Results](https://github.com/marcopaglio/kip-parallel-OpenMP/tree/parallel%231/SoA#experimental-results "Experimental results section for the second parallelization of kip-parallel-openMP's SoA version"). Questa versione si distingue inoltre per un'altra piccola ottimizzazione: i calcoli invarianti di `posBase` e `kwBase` vengono eseguiti fuori dal ciclo `i` in modo da ridurre l'aritmetica degli indici.
+**This version has shown truly significant improvements, more than 2x performance for the largest kernels**. In this regard, we have chosen to label this parallel version as *Parallel#1*, i.e. the best of this first set of experiments, the results of which are reported in [Parallel#1's Experimental Results](https://github.com/marcopaglio/kip-parallel-OpenMP/tree/parallel%231/SoA#experimental-results "Experimental results section for the second parallelization of kip-parallel-openMP's SoA version"). This version also features another small optimization: the invariant calculations of `posBase` and `kwBase` are performed outside the `i` loop in order to reduce index arithmetic.
 
-#### Divisione manuale del lavoro tra thread
+#### Manual worksharing among threads
 
-Il passo successivo è stato quello di provare ad eliminare completamente il worksharing construct `omp for`, mantenendo la sola regione `parallel`, e calcolando manualmente per ogni thread un intervallo di righe.
-
-La prima versione è stata:
+The next step was to try to completely eliminate the `omp for` worksharing construct, retaining only the `parallel` region, and manually calculating a range of rows for each thread.
+The first version was:
 
 ```cpp
 lowerBound = outputHeight / nthreads * thread_id;
@@ -116,9 +115,9 @@ upperBound =
     : outputHeight / nthreads * (thread_id + 1);
 ```
 
-L'obiettivo era verificare se eliminando l'intervento dello scheduler OpenMP fosse possibile ottenere prestazioni migliori. Il risultato è stato però **identico o minimamente peggiore**.
+The goal was to determine whether eliminating the OpenMP scheduler’s intervention would result in better performance. However, the result was **identical or only slightly worse**.
 
-È stato quindi individuato un problema in questa prima versione: tutto il resto della divisione viene assegnato all'ultimo thread; ciò potrebbe rendere la suddivisione manuale vana dal momento che tutti i thread dovrebbero attendere la fine del maggior carico di lavoro dell'ultimo thread. Si è dunque proposto una modalità *fair*, in cui le righe residue vengono distribuite una per volta ai primi thread:
+A problem was therefore identified in this first version: the rest of the division is assigned to the last thread; this could render manual partitioning ineffective, since all threads would have to wait for the last thread to finish its heavier workload. A *fair* mode was therefore proposed, in which the remaining lines are distributed one at a time to the first threads:
 
 ```cpp
 const unsigned int base = outputHeight / nthreads;
@@ -133,7 +132,7 @@ upperBound =
     (thread_id < remainder ? 1 : 0);
 ```
 
-Questa modifica **ha prodotto piccoli miglioramenti in tutti gli esperimenti rispetto alla prima divisione manuale**, confermando che il precedente squilibrio fosse reale. Tuttavia, anche dopo aver reso la partizione quasi perfettamente uniforme, **nel complesso la suddivisione manuale non ha portato miglioramenti**. Questo risultato dimostra che il vantaggio del dynamic scheduling non deriva semplicemente da un'implementazione inefficiente dello static scheduling di OpenMP.
+This change **resulted in slight improvements in all experiments compared to the initial manual partitioning**, confirming that the previous imbalance was real. However, even after making the partitioning nearly perfectly uniform, **overall, the manual partitioning did not lead to any improvements**. This result demonstrates that the advantage of dynamic scheduling does not simply stem from an inefficient implementation of OpenMP’s static scheduling.
 
 ### Restructuring
 
